@@ -535,44 +535,29 @@ rule Alice_3:
 **/
 rule QE [color=AADADA]:
 	let
-		// retrieve Report Key
-		//request = <$eid,$pid,md,'report'>
-		//report_key = sgx_get_key(request)
 		report_key = sgx_get_key(<$MRENCLAVE, 'report', ~nonce>)
+		//TODO Consider adding pid for supporting multiple QE
 
 		// cert = <$pid, pk(~ak), $IAS, sign(<$pid, pk(~ak), $IAS>, ~isk)>
-		//NOTE Não é necessário estar aqui, mas ver se assim terina
-
-		// d = <report_data>
-		// b = <$eid,$pid,md,d>               // sgx_report_body_t
-		// report = <b,t>                        // sgx_report_t
-		//
-		// //TODO Use body, not report, in quote (check struct, fix ra.spthy as well) ***DONE***
-		// //m = <$prog,$eid,$pid,b,cert>
-		// m = <b,cert>
-		// //FIXME worth using proper quote structure?
-		// quote = <m,sign(m,~ak)>               // sgx_quote_t
+		//NOTE Não é necessário estar aqui, mas ver se assim termina
 
 		data = <'hA'>
-		//body = <$A, $p, md, data>
-		body = <$A, $p, $MRENCLAVE, data>
+		body = <$eid, $pid, $MRENCLAVE, data>
 		report = <body, CMAC(body, report_key)>
-		//523 report = <body, tag>
 
 		content = <body>
-		cert = <$pid, pk(~ak), $IAS, sign(<$pid, pk(~ak), $IAS>, ~isk)>
 		quote = <content, sign(content, ~ak), cert>
 	in
 	[
 		!QE($pid, ~ak, cert, ~nonce),
-		!IAS_pub($IAS, pk(~isk)),
+		// !IAS_pub($IAS, pk(~isk)),
 		In(report)
 	]--[
 		Progress_QE(report,quote),
-		Receive_QE($pid, report),
-		Send_QE($pid, quote),
-		//523 Eq(tag, CMAC(body, report_key)),
-		Secret(report_key)
+
+		Receive_QE($pid, report), //FIXME
+		Send_QE($pid, quote),     //FIXME
+		Secret(report_key)        //FIXME
 	]->[
 		Out(quote)
 	]
