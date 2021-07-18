@@ -57,11 +57,9 @@ rule Register_Intel [color=DADADA]:
 rule Register_RAS:
 	[
 		SharedKey2($RAS, ~subscription_key),
-		!Ltk($RAS, ~ltk),
-		Fr(~tid)
+		!Ltk($RAS, ~ltk)
 	] --> [
-		// !RAS($RAS, ~subscription_key, ~ltk)
-		CAS(~tid, 'idle', <$RAS, ~subscription_key, ~ltk>)
+		!CAS($RAS, ~subscription_key, ~ltk)
 	]
 	//[ SharedKey2($id, ~k) ] --> [ !RAS($id, ~k) ]
 
@@ -672,24 +670,10 @@ rule IAS [color=DADADA]:
 // 		Out(m10)
 // 	]
 
-// Consumes processing_4 and produces idle (placed in execution state, hence we say we're in state `idle`)
-rule CAS_0:
-	[
-		// CAS(~tid, 'processing_4', data)
-		CAS(~tid, 'processing_4', <$RAS, ~subscription_key, ~ltk>)
-	]--[
-		Progress_C0(~tid)
-	]->[
-		// CAS(~tid, 'idle', data)
-		CAS(~tid, 'idle', <$RAS, ~subscription_key, ~ltk>)
-	]
-
 // Receive M13, Send M14
 rule RAS_1:
 	let
-		// so = <~client_session_key, ~server_session_key, ~ssk2>
-		so = <$RAS, ~subscription_key, ~ltk, ~client_session_key, ~server_session_key, ~ssk2>
-
+		so = <~client_session_key, ~server_session_key, ~ssk2>
 		//pub = pk(~ltk_IAS)
 
 		// cert = <$pid, pk(~ak), $IAS, sign(<$pid, pk(~ak), $IAS>, ~isk)> // parte de baixo
@@ -697,9 +681,7 @@ rule RAS_1:
 		//523 quote = <content, sign(content, ~ak), cert>
 	in
 	[
-		// !RAS($RAS, ~subscription_key, ~ltk),
-		CAS(~tid, 'idle', <$RAS, ~subscription_key, ~ltk>),
-
+		!CAS($RAS, ~subscription_key, ~ltk),
 		!Pk($IAS, pub),                // retrieve server public key
 		//In(quote),
 		//In(aenc(quote, pk(~ltk))),
@@ -716,9 +698,7 @@ rule RAS_1:
 		RAS_O1b($RAS, quote, ~subscription_key),//TORM
 		Secret(~subscription_key)
 	]->[
-		// AgSt('RAS', $RAS, '1', so),
-		CAS(~tid, 'processing_3', <$RAS, ~subscription_key, ~ltk, ~client_session_key, ~server_session_key, ~ssk2>),
-
+		AgSt('RAS', $RAS, 'forwarding', so),
 		//0 Out(quote)
 		//Out(<quote, '12345'>)
 		//Out(<quote, CMAC(quote, ~subscription_key)>)
@@ -736,16 +716,10 @@ rule RAS_1:
 
 rule RAS_2:
 	let
-		// si = <~client_session_key, ~server_session_key, ~ssk2>
-		si = <$RAS, ~subscription_key, ~ltk, ~client_session_key, ~server_session_key, ~ssk2>
-
-		so = <$RAS, ~subscription_key, ~ltk>
+		si = <~client_session_key, ~server_session_key, ~ssk2>
 	in
 	[
-		// AgSt('RAS', $RAS, '1', si),
-		// CAS(~tid, 'processing_3', si),
-		CAS(~tid, 'processing_3', <$RAS, ~subscription_key, ~ltk, ~client_session_key, ~server_session_key, ~ssk2>),
-
+		AgSt('RAS', $RAS, 'forwarding', si),
 		//1 Fr(~nonce),
 		//524 In(report)
 
@@ -759,9 +733,6 @@ rule RAS_2:
 		RAS_I2($RAS, avr)
 		//, RAS_O2(avr)
 	]->[
-		// CAS(~tid, 'processing_4', so),
-		CAS(~tid, 'processing_4', <$RAS, ~subscription_key, ~ltk>),
-
 		//524 Out(report)
 		////Out(senc(report, ~client_session_key))
 		//1 Out(senc(<report>, ~client_session_key))
@@ -803,17 +774,15 @@ lemma temp_01: exists-trace
 // Provar caminho ...
 lemma temp_02: exists-trace
 	"
-	Ex report quote ssk1 avr ssk2 tid #t20 #t21 #t22 #t23 #t24 #t25 #t26 #t27.
+	Ex report quote ssk1 avr ssk2 #t20 #t21 #t22 #t23 #t24 #t25 #t26.
 	Progress_A1(report) @ t20 & Progress_QE(report,quote) @ t21 & Progress_A2(quote) @ t22 & Progress_R1(quote,ssk1) @ t23 & Progress_IAS(quote,ssk1,avr,ssk2) @ t24 & Progress_R2(avr,ssk2) @ t25 & Progress_A3(avr) @ t26 &
-	Progress_C0(tid) @ t27 &
 
 	t20 < t21 &
 	t21 < t22 &
 	t22 < t23 &
 	t23 < t24 &
 	t24 < t25 &
-	t25 < t26 &
-	t26 < t27
+	t25 < t26
 	"
 	//"Ex A RAS IAS m #i #j #k. Send_IAS(IAS,m) @i & RAS_I2(RAS,m) @j & Alice_I3(A,m) @k"
 
