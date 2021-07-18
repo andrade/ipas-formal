@@ -54,7 +54,7 @@ rule Register_Intel [color=DADADA]:
 		// Out(pk(rsk))  // Give the Report Public Key to all entities
 	]
 
-rule Register_RAS:
+rule Register_CAS:
 	[
 		SharedKey2($RAS, ~subscription_key),
 		!Ltk($RAS, ~ltk)
@@ -671,7 +671,7 @@ rule IAS [color=DADADA]:
 // 	]
 
 // Receive M13, Send M14
-rule RAS_1:
+rule CAS_2:
 	let
 		so = <~client_session_key, ~server_session_key, ~ssk2>
 		//pub = pk(~ltk_IAS)
@@ -714,7 +714,7 @@ rule RAS_1:
 	]
 
 
-rule RAS_2:
+rule CAS_3:
 	let
 		si = <~client_session_key, ~server_session_key, ~ssk2>
 	in
