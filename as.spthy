@@ -673,7 +673,7 @@ rule IAS [color=DADADA]:
 // Receive M13, Send M14
 rule CAS_2:
 	let
-		so = <~client_session_key, ~server_session_key, ~ssk2>
+		so = <~tid, ~client_session_key, ~server_session_key, ~ssk2>
 		//pub = pk(~ltk_IAS)
 
 		// cert = <$pid, pk(~ak), $IAS, sign(<$pid, pk(~ak), $IAS>, ~isk)> // parte de baixo
@@ -682,6 +682,7 @@ rule CAS_2:
 	in
 	[
 		!CAS($RAS, ~subscription_key, ~ltk),
+		Fr(~tid),
 		!Pk($IAS, pub),                // retrieve server public key
 		//In(quote),
 		//In(aenc(quote, pk(~ltk))),
@@ -716,7 +717,7 @@ rule CAS_2:
 
 rule CAS_3:
 	let
-		si = <~client_session_key, ~server_session_key, ~ssk2>
+		si = <~tid, ~client_session_key, ~server_session_key, ~ssk2>
 	in
 	[
 		AgSt('RAS', $RAS, 'forwarding', si),
