@@ -153,6 +153,53 @@ rule Register_Enclave:
 // 	]->[
 // 	]
 
+rule Alice_1:
+	let
+		so = <~tid_Alice>
+	in
+	[
+		!Enclave($A, $p, $MRENCLAVE, $MRSIGNER, ~nonce),
+		Fr(~tid_Alice)
+	]--[
+		Progress_A1(~tid_Alice)
+	]->[
+		AgSt('enclave', $A, 'start', so),
+		Out(~tid_Alice)
+	]
+
+rule Alice_2:
+	let
+		si = <~tid_Alice>
+		so = <~tid_Alice, ~tid_Boris, gid_Boris>
+
+		gid_Alice = '0'
+	in
+	[
+		// !Enclave($A, $p, $MRENCLAVE, $MRSIGNER, ~nonce),
+		AgSt('enclave', $A, 'start', si),
+		In(<~tid_Boris, gid_Boris>)
+	]--[
+		Progress_A2(~tid_Alice, ~tid_Boris, gid_Boris)
+	]->[
+		AgSt('enclave', $A, 'foo', so)
+	]
+
+rule Boris_1:
+	let
+		gid_Boris = '0'
+		so = <~tid_Boris>
+	in
+	[
+		!Enclave($B, $q, $MRENCLAVE, $MRSIGNER, ~nonce),
+		In(~tid_Alice),
+		Fr(~tid_Boris)
+	]--[
+		Progress_B1(~tid_Alice, ~tid_Boris, gid_Boris)
+	]->[
+		AgSt('enclave', $B, 'start', so),
+		Out(<~tid_Boris, gid_Boris>)
+	]
+
 //[color=DAAADA]
 rule Alice_11:
 	let
@@ -888,6 +935,14 @@ lemma temp: exists-trace
 // Provar caminho IAS, RAS 2, Alice 3.
 lemma temp_01: exists-trace
 	"Ex A RAS IAS m #i #j #k. Send_IAS(IAS,m) @i & RAS_I2(RAS,m) @j & Alice_I3(A,m) @k"
+
+lemma Alice: exists-trace
+	"
+	Ex tid_Alice tid_Boris gid_Boris #t1 #t2 #t3.
+	Progress_A1(tid_Alice) @ t1 &
+	Progress_B1(tid_Alice, tid_Boris, gid_Boris) @ t2 &
+	Progress_A2(tid_Alice, tid_Boris, gid_Boris) @ t3
+	"
 
 // Provar caminho ...
 lemma Carol: exists-trace
