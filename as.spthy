@@ -154,7 +154,7 @@ rule Register_Enclave:
 // 	]
 
 //[color=DAAADA]
-rule Alice_1:
+rule Alice_11:
 	let
 		report_key = sgx_get_key(<$MRENCLAVE, 'report', ~nonce>)
 
@@ -168,7 +168,7 @@ rule Alice_1:
 	[
 		!Enclave($A, $p, $MRENCLAVE, $MRSIGNER, ~nonce)
 	]--[
-		Progress_A1(report),
+		Progress_A11(report),
 		Alice_O1($A, report),
 		Secret(report_key)
 	]->[
@@ -177,7 +177,7 @@ rule Alice_1:
 	]
 
 //[color=DAAADA]
-rule Alice_2:
+rule Alice_12:
 	// let
 	// 	//FIXME get body her to extract hB and compare with hA in Eq
 	// 	d = <hB> //2
@@ -223,7 +223,7 @@ rule Alice_2:
 		Fr(~session_key),
 		In(quote)
 	]--[
-		Progress_A2(quote),
+		Progress_A12(quote),
 		Alice_I2($A, quote),
 		Alice_O2($A, quote),
 		Eq(quote,quote)
@@ -236,7 +236,7 @@ rule Alice_2:
 	]
 
 //[color=DAAADA]
-rule Alice_3:
+rule Alice_13:
 	let
 		si = <'hA', ~session_key>
 		// // uid = <$prog,$eidA,$pidA>
@@ -253,7 +253,7 @@ rule Alice_3:
 		In(senc(certified_report, ~session_key))
 		//1 In(senc(<certified_report>, ~client_session_key))
 	]--[
-		Progress_A3(certified_report),
+		Progress_A13(certified_report),
 		Alice_I3($A, certified_report),
 		Eq(true, verify(signature, avr_data, pk(~rsk)))
 		//,Alice_O3($A,m7)
@@ -264,7 +264,7 @@ rule Alice_3:
 		//Out(m7) // commented? FIXME these two lines?
 	]
 
-// rule Alice_4:
+// rule Alice_14:
 // 	let
 // 		m10 = <rA,rB>
 // 		m11 = <rA,rB>
