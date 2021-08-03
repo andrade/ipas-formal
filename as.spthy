@@ -33,6 +33,87 @@ rule Get_pk:
 	[ !Pk(id, pub) ] --> [ Out(pub) ]
 
 rule Create_IAS:
+	[
+		Fr(~id_IAS)
+	]--[
+		OnlyOnce(),
+		Create_IAS(~id_IAS)
+	]->[
+		!ID_IAS(~id_IAS),
+		Out(~id_IAS)
+	]
+
+rule Create_CAS:
+	[ Fr(~id_CAS) ]--[ Create_CAS(~id_CAS) ]->[ !ID_CAS(~id_CAS), Out(~id_CAS) ]
+
+rule Create_QE:
+	[ Fr(~id_QE) ]--[ Create_QE(~id_QE) ]->[ !ID_QE(~id_QE), Out(~id_QE) ]
+
+rule Create_Enclave:
+	[
+		Fr(~id_Enclave)
+	]--[
+		Create_Enclave(~id_Enclave)
+	]->[
+		!ID_Enclave(~id_Enclave),
+		Out(~id_Enclave)
+	]
+
+// útil para ter algo que identifique a key hierarchy única do processador
+rule Create_Processor:
+	[
+		Fr(~id_Processor)
+	]--[
+		Create_Processor(~id_Processor)
+	]->[
+		!ID_Processor(~id_Processor),
+		Out(~id_Processor)
+	]
+
+// Associate QE with a CPU and with IAS
+// Temos id_Processor que vincula QE a um processador específico (IAS não: IAS comunica com QE e é QE que está bound a um CPU)
+// Temos tid_IAS que vincula este QE a uma thread específica do IAS
+// Cria-se um par de chaves para o QE ficando o IAS com cópia da chave pública de forma a simular a infraestrutura de atestação
+rule Register_QE:
+	[
+		!ID_IAS(~id_IAS),
+		!ID_QE(~id_QE),
+		!ID_Processor(~id_Processor),
+		Fr(~tid_QE),
+		Fr(~tid_IAS),
+		Fr(~ak)
+	]--[
+		Register_QE(~id_IAS, ~id_QE, ~id_Processor, ~tid_IAS, ~tid_QE)
+	]->[
+		State_QE(~tid_QE, 'Register_QE', <~id_QE, ~id_Processor, ~tid_IAS, ~ak>),
+		State_IAS(~tid_IAS, 'Register_QE', <~id_IAS, ~tid_QE, pk(~ak)>)
+	]
+
+// Bind enclave to a CPU (not with QE since QE and CPU already bound)
+rule Register_Enclave:
+	[
+		!ID_IAS(~id_Enclave),
+		!ID_Processor(~id_Processor),
+		Fr(~tid_Enclave)
+	]--[
+		Neq($MRENCLAVE, $MRSIGNER),
+		Register_Enclave(~id_Enclave, ~id_Processor, ~tid_Enclave)
+	]->[
+		State_Enclave(~tid_Enclave, 'Register_Enclave', <~id_Enclave, ~id_Processor, $MRENCLAVE, $MRSIGNER>)
+	]
+
+// rule Bind_QE_to_Processor:
+// 	[
+// 		!ID_QE(~id_QE),
+// 		!ID_Processor(~id_Processor),
+// 		Fr(~tid_QE)
+// 	]--[
+// 		Bind_QE(~id_QE, ~id_Processor, ~tid_QE)
+// 	]->[
+// 		State_QE(~tid_QE, 'Bind_QE', <~id_QE, ~id_Processor>)
+// 	]
+
+rule Create_IAS_old:
 	[ Fr(~id_IAS) ]--[ Create_IAS(~id_IAS) ]->[ !ID_IAS(~id_IAS), Out(~id_IAS) ]
 
 rule Register_Intel [color=DADADA]:
@@ -68,7 +149,7 @@ rule Register_CAS:
 	]
 	//[ SharedKey2($id, ~k) ] --> [ !RAS($id, ~k) ]
 
-rule Register_QE [color=AADADA]:
+rule Register_QE_old [color=AADADA]:
 	let
 		// subject name, subject key, issuer name, signature
 		cert = <$pid, pk(~ak), $IAS, sign(<$pid, pk(~ak), $IAS>, ~isk)>
@@ -85,7 +166,7 @@ rule Register_QE [color=AADADA]:
 		!QE($pid, ~ak, cert, ~nonce)
 	]
 
-rule Register_Enclave [color=FFCCAA]:
+rule Register_Enclave_old [color=FFCCAA]:
 	// let
 	// 	//metadata = <$MRENCLAVE, $MRSIGNER>
 	//
