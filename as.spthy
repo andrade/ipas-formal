@@ -32,12 +32,16 @@ rule Register_pk:
 rule Get_pk:
 	[ !Pk(id, pub) ] --> [ Out(pub) ]
 
+rule Create_IAS:
+	[ Fr(~id_IAS) ]--[ Create_IAS(~id_IAS) ]->[ !ID_IAS(~id_IAS), Out(~id_IAS) ]
+
 rule Register_Intel [color=DADADA]:
 	// let
 	// 	ipk = pk(isk)              // Intel Public Key
 	// 	rpk = pk(rsk)              // Report Public Key
 	// in
 	[
+		!ID_IAS(~id_IAS),
 		Fr(~isk),                   // Intel Signing Key
 		Fr(~rsk),                   // Report Signing Key
 		!Ltk($IAS, ~ltk),             // TLS
@@ -48,6 +52,7 @@ rule Register_Intel [color=DADADA]:
 		Secret(~rsk)
 	]->[
 		!IAS($IAS, ~isk, ~rsk, ~ltk, ~k),
+		!IASv2(~id_IAS),  //TODO remove
 		!IAS_pub($IAS, pk(~isk)),
 		!IAS_pub($IAS, pk(~rsk))
 		// ,
@@ -80,8 +85,7 @@ rule Register_QE [color=AADADA]:
 		!QE($pid, ~ak, cert, ~nonce)
 	]
 
-//[color=FFCCAA]
-rule Register_Enclave:
+rule Register_Enclave [color=FFCCAA]:
 	// let
 	// 	//metadata = <$MRENCLAVE, $MRSIGNER>
 	//
@@ -155,13 +159,13 @@ rule Register_Enclave:
 
 rule Alice_1:
 	let
-		so = <~tid_Alice>
+		so = <~seed_Alice, ~tid_Alice>
 	in
 	[
-		!Enclave($A, $p, $MRENCLAVE, $MRSIGNER, ~nonce),
+		!Enclave($A, $p, $MRENCLAVE, $MRSIGNER, ~seed_Alice),
 		Fr(~tid_Alice)
 	]--[
-		Progress_A1(~tid_Alice)
+		Progress_A1(~tid_Alice, ~seed_Alice)
 	]->[
 		AgSt('enclave', $A, 'start', so),
 		Out(~tid_Alice)
@@ -169,7 +173,7 @@ rule Alice_1:
 
 rule Alice_2:
 	let
-		si = <~tid_Alice>
+		si = <~seed_Alice, ~tid_Alice>
 		so = <~tid_Alice, ~tid_Boris, gid_Boris>
 
 		gid_Alice = '0'
@@ -179,9 +183,11 @@ rule Alice_2:
 		AgSt('enclave', $A, 'start', si),
 		In(<~tid_Boris, gid_Boris>)
 	]--[
-		Progress_A2(~tid_Alice, ~tid_Boris, gid_Boris)
+		Progress_A2(~seed_Alice, ~tid_Alice, gid_Alice, ~tid_Boris, gid_Boris)
 	]->[
-		AgSt('enclave', $A, 'foo', so)
+		AgSt('enclave', $A, 'foo', so),
+		Out(<~tid_Alice, gid_Alice>),
+		Out(<~tid_Alice, gid_Boris>)
 	]
 
 rule Boris_1:
@@ -190,11 +196,11 @@ rule Boris_1:
 		so = <~tid_Boris>
 	in
 	[
-		!Enclave($B, $q, $MRENCLAVE, $MRSIGNER, ~nonce),
+		!Enclave($B, $q, $MRENCLAVE, $MRSIGNER, ~seed_Boris),
 		In(~tid_Alice),
 		Fr(~tid_Boris)
 	]--[
-		Progress_B1(~tid_Alice, ~tid_Boris, gid_Boris)
+		Progress_B1(~tid_Alice, ~tid_Boris, gid_Boris, ~seed_Boris)
 	]->[
 		AgSt('enclave', $B, 'start', so),
 		Out(<~tid_Boris, gid_Boris>)
@@ -834,6 +840,66 @@ rule IAS [color=DADADA]:
 // 		Out(m10)
 // 	]
 
+rule IAS_2 [color=DADADA]:
+let
+	// sig_rl = 'placeholder'
+	// response = <'OK', ~request_id, sig_rl>
+	response = <'OK', ~request_id, 'sig_rl'>
+in
+[
+	// !IAS($IAS, ~isk, ~rsk, ~ltk, ~subscription_key),
+	// In(aenc(<~tid_CAS, ~session_key_client_to_server, ~session_key_server_to_client>, pk(~ltk))),
+	// In(senc(<~tid_CAS, ~subscription_key, gid_enclave>, ~session_key_client_to_server)),
+	!IASv2(~id_IAS),
+	In(<~tid_CAS, gid_enclave, ~subscription_key>),
+	Fr(~request_id)
+]--[
+	Progress_I2(~tid_CAS, gid_enclave, ~request_id)
+]->[
+	// Out(senc(<~tid_CAS, response>, ~session_key_server_to_client))
+]
+
+// Receive M3, Send M4
+rule CAS_12:
+	let
+		so = <~tid_enclave, gid_enclave, ~tid_CAS, ~session_key_client_to_server, ~session_key_server_to_client>
+	in
+	[
+		!CAS($RAS, ~subscription_key, ~ltk),
+		Fr(~tid_CAS),
+		!Pk($IAS, pub),                // retrieve server public key
+		// In(aenc(~client_session_key, pk(~ltk))),
+		// In(senc(quote, ~client_session_key)),
+
+		In(<~tid_enclave, gid_enclave>),
+		//NOTE Não faz mal ser enviado em claro porque não confiamos no CAS. O IAS depois certifica a report e o cliente verifica que o GID enviado e o Thread ID estão correctos. Assim se adversário modificar, cliente rejeita o resultado e aborta a execução.
+
+		Fr(~session_key_client_to_server),
+		Fr(~session_key_server_to_client)
+	]--[
+		Progress_C12(~tid_enclave, gid_enclave, ~tid_CAS)
+	]->[
+		AgSt('RAS', $RAS, 'fetching_sig_rl', so),
+		// Out(aenc(<~tid_CAS, ~session_key_client_to_server, ~session_key_server_to_client>, pub)),
+		// Out(senc(<~tid_CAS, ~subscription_key, gid_enclave>, ~session_key_client_to_server))
+		Out(<~tid_CAS, gid_enclave, ~subscription_key>)
+	]
+
+// Receive M5, Send M6
+rule CAS_13:
+	let
+		si = <~tid_enclave, gid_enclave, ~tid_CAS, ~session_key_client_to_server, ~session_key_server_to_client>
+	in
+	[
+		AgSt('RAS', $RAS, 'fetching_sig_rl', si),
+		// In(senc(sig_rl, ~session_key_server_to_client))
+		In(senc(<~tid_CAS, response>, ~session_key_server_to_client))
+	]--[
+		Progress_C13(~tid_enclave, ~tid_CAS)
+	]->[
+		Out(<~tid_enclave, gid_enclave, response>)
+	]
+
 // Receive M13, Send M14
 rule CAS_2:
 	let
@@ -938,10 +1004,14 @@ lemma temp_01: exists-trace
 
 lemma Alice: exists-trace
 	"
-	Ex tid_Alice tid_Boris gid_Boris #t1 #t2 #t3.
-	Progress_A1(tid_Alice) @ t1 &
-	Progress_B1(tid_Alice, tid_Boris, gid_Boris) @ t2 &
-	Progress_A2(tid_Alice, tid_Boris, gid_Boris) @ t3
+	Ex seed_Alice tid_Alice gid_Alice seed_Boris tid_Boris gid_Boris tid_1 tid_2 request_id_1 request_id_2 #t1 #t2 #t3 #t4 #t5 #t6 #t7.
+	Progress_A1(tid_Alice, seed_Alice) @ t1 &
+	Progress_B1(tid_Alice, tid_Boris, gid_Boris, seed_Boris) @ t2 &
+	Progress_A2(seed_Alice, tid_Alice, gid_Alice, tid_Boris, gid_Boris) @ t3 &
+	Progress_C12(tid_Alice, gid_Alice, tid_1) @ t4 &
+	Progress_C12(tid_Alice, gid_Boris, tid_2) @ t5 &
+	Progress_I2(tid_1, gid_Alice, request_id_1) @ t6 &
+	Progress_I2(tid_2, gid_Boris, request_id_2) @ t7
 	"
 
 // Provar caminho ...
