@@ -34,29 +34,39 @@ rule Get_pk:
 
 rule Create_IAS:
 	[
-		Fr(~id_IAS)
+		Fr(~id_IAS),
+		Fr(~priv_IAS)
 	]--[
 		OnlyOnce(),
 		Create_IAS(~id_IAS)
 	]->[
 		!ID_IAS(~id_IAS),
+		!Keys_IAS(~id_IAS, ~priv_IAS), // root keys, we use single key pair
 		Out(~id_IAS)
 	]
 
 rule Create_CAS:
 	[ Fr(~id_CAS) ]--[ Create_CAS(~id_CAS) ]->[ !ID_CAS(~id_CAS), Out(~id_CAS) ]
 
+rule Create_RAS:
+	[ Fr(~id_RAS) ]--[ Create_RAS(~id_RAS) ]->[ !ID_RAS(~id_RAS), Out(~id_RAS) ]
+
 rule Create_QE:
 	[ Fr(~id_QE) ]--[ Create_QE(~id_QE) ]->[ !ID_QE(~id_QE), Out(~id_QE) ]
 
 rule Create_Enclave:
 	[
-		Fr(~id_Enclave)
+		Fr(~id_Enclave),
+		Fr(~MRENCLAVE),
+		Fr(~MRSIGNER)
 	]--[
-		Create_Enclave(~id_Enclave)
+		Create_Enclave(~id_Enclave, ~MRENCLAVE, ~MRSIGNER)
 	]->[
 		!ID_Enclave(~id_Enclave),
-		Out(~id_Enclave)
+		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER, 'NULL'), // FIXME awk design
+		Out(~id_Enclave),
+		Out(~MRENCLAVE),
+		Out(~MRSIGNER)
 	]
 
 // útil para ter algo que identifique a key hierarchy única do processador
@@ -70,6 +80,79 @@ rule Create_Processor:
 		Out(~id_Processor)
 	]
 
+rule Create_CPU:
+	[
+		Fr(~id_CPU)
+	]--[
+		Create_CPU(~id_CPU)
+	]->[
+		!ID_CPU(~id_CPU),
+		Out(~id_CPU)
+	]
+
+// Provision CPU and QE: essentially registers these two agents with Intel
+rule Provisioning:
+	[
+		!ID_IAS(~id_IAS),
+		!Keys_IAS(~id_IAS, ~priv_IAS),
+		!ID_QE(~id_QE),
+		!ID_CPU(~id_CPU),
+		Fr(~tid_QE),
+		Fr(~priv_QE), // attestation key for QE, uses to sign quotes
+		Fr(~tid_CPU)
+	]--[
+		Provision(~id_IAS, ~id_QE, ~id_CPU)
+	]->[
+		State_QE(~tid_QE, 'Register_QE', <~id_QE, ~id_CPU, ~id_IAS, ~priv_QE, sign(pk(~priv_QE), ~priv_IAS), pk(~priv_IAS)>),
+		State_CPU(~tid_CPU, 'Provisioning_CPU', <~id_CPU, ~id_QE, ~id_IAS, pk(~priv_IAS)>)
+	]
+
+rule Licensing:
+	[
+		!ID_IAS(~id_IAS),
+		!Keys_IAS(~id_IAS, ~priv_IAS),
+		!ID_Enclave(~id_Enclave),
+		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER, 'NULL')
+	]--[
+		Licensing(~id_Enclave, ~id_IAS)
+	]->[
+		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER, sign(~id_Enclave, ~priv_IAS))
+	]
+
+// Bind enclave to CPU
+// FIXME: Enclave deve ter lá os MR ?? TODO: acho que sim para poder fork igual
+rule Binding:
+	[
+		!ID_CPU(~id_CPU),
+		!ID_Enclave(~id_Enclave),
+		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER, license),
+		Fr(~tid_Enclave)
+	]--[
+		Binding(~tid_Enclave, ~id_Enclave, ~id_CPU)
+	]->[
+		State_Enclave(~tid_Enclave, 'binding', <~id_Enclave, ~id_CPU>)
+	]
+
+rule Attest:
+	[
+	]--[
+	]->[
+	]
+
+rule Register_CAS:
+	[
+		!ID_IAS(~id_IAS),
+		!ID_CAS(~id_CAS),
+		Fr(~tid_IAS),
+		Fr(~tid_CAS),
+		Fr(~subscription_key)
+	]--[
+		Register_CAS(~id_IAS, ~id_CAS, ~tid_IAS, ~tid_CAS)
+	]->[
+		State_CAS(~tid_CAS, 'register', <~id_CAS, ~tid_IAS, ~subscription_key>)
+	]
+
+/*
 // Associate QE with a CPU and with IAS
 // Temos id_Processor que vincula QE a um processador específico (IAS não: IAS comunica com QE e é QE que está bound a um CPU)
 // Temos tid_IAS que vincula este QE a uma thread específica do IAS
@@ -88,6 +171,7 @@ rule Register_QE:
 		State_QE(~tid_QE, 'Register_QE', <~id_QE, ~id_Processor, ~tid_IAS, ~ak>),
 		State_IAS(~tid_IAS, 'Register_QE', <~id_IAS, ~tid_QE, pk(~ak)>)
 	]
+*/
 
 // Bind enclave to a CPU (not with QE since QE and CPU already bound)
 rule Register_Enclave:
@@ -140,6 +224,7 @@ rule Register_Intel [color=DADADA]:
 		// Out(pk(rsk))  // Give the Report Public Key to all entities
 	]
 
+/*
 rule Register_CAS:
 	[
 		SharedKey2($RAS, ~subscription_key),
@@ -148,6 +233,7 @@ rule Register_CAS:
 		!CAS($RAS, ~subscription_key, ~ltk)
 	]
 	//[ SharedKey2($id, ~k) ] --> [ !RAS($id, ~k) ]
+*/
 
 rule Register_QE_old [color=AADADA]:
 	let
@@ -1128,6 +1214,26 @@ lemma detalhado: exists-trace
 	Send_QE(Q,m2) @c & Alice_I2(A,m2) @d &
 	Alice_O2(A,m3) @e & RAS_I1(m3) @f &
 	a<b & b<c & c<d & d<e & e<f"
+
+// E1 e E2 são o mesmo enclave mas a executar em processadores diferentes: E1 no CPU_1, e E2 e E3 no CPU_3.
+lemma setup: exists-trace
+	"
+	Ex QE_1 QE_3 E1 E2 E3 MRENCLAVE_1 MRSIGNER_1 MRENCLAVE_3 MRSIGNER_3 tid_E1 tid_E2 tid_E3 IAS CPU_1 CPU_3 CAS tid_CAS tid_IAS #t11 #t12 #t13 #t21 #t22 #t23 #t31 #t32 #t33 #t41 #t42 #t51 #t52 #t61 #t62.
+
+	Create_Enclave(E1, MRENCLAVE_1, MRSIGNER_1) @ #t11 & Licensing(E1, IAS) @ #t12 & Binding(tid_E1, E1, CPU_1) @ #t13 &
+
+	Create_Enclave(E2, MRENCLAVE_1, MRSIGNER_1) @ #t21 & Licensing(E2, IAS) @ #t22 & Binding(tid_E2, E2, CPU_3) @ #t23 &
+
+	Create_Enclave(E3, MRENCLAVE_3, MRSIGNER_3) @ #t31 & Licensing(E3, IAS) @ #t32 & Binding(tid_E3, E3, CPU_3) @ #t33 &
+
+	Create_QE(QE_1) @ #t41 & Provision(IAS, QE_1, CPU_1) @ #t42 &
+
+	Create_QE(QE_3) @ #t51 & Provision(IAS, QE_3, CPU_3) @ #t52 &
+
+	Create_CAS(CAS) @ #t61 & Register_CAS(IAS, CAS, tid_IAS, tid_CAS) @ #t62 &
+
+	t31 < t32 & t32 < t33
+	"
 
 /**
 ** Prove that our protocol can be executed.
