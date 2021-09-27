@@ -52,7 +52,7 @@ rule Create_Enclave:
 		Create_Enclave(~id_Enclave, ~MRENCLAVE, ~MRSIGNER)
 	]->[
 		!ID_Enclave(~id_Enclave),
-		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER, 'NULL'), // REVIEW awk design
+		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
 		Out(~id_Enclave),
 		Out(~MRENCLAVE),
 		Out(~MRSIGNER)
@@ -88,18 +88,18 @@ rule Provisioning:
 // Whitelist enclave
 rule Licensing:
 	let
-		// Enclave ID, IAS signature over Enclave ID, IAS public key
-		license = <~id_Enclave, sign(~id_Enclave, ~priv_IAS), pk(~priv_IAS)>
+		// Enclave ID, IAS ID, IAS signature over Enclave ID, IAS public key
+		license = <~id_Enclave, ~id_IAS, sign(~id_Enclave, ~priv_IAS), pk(~priv_IAS)>
 	in
 	[
 		!ID_IAS(~id_IAS),
 		!Keys_IAS(~id_IAS, ~priv_IAS),
 		!ID_Enclave(~id_Enclave),
-		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER, 'NULL')
+		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER)
 	]--[
 		Licensing(~id_Enclave, ~id_IAS)
 	]->[
-		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER, license)
+		!License(~id_Enclave, license)
 	]
 
 // Bind enclave to CPU
@@ -108,7 +108,8 @@ rule Binding:
 	[
 		!ID_CPU(~id_CPU),
 		!ID_Enclave(~id_Enclave),
-		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER, license),
+		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
+		!License(~id_Enclave, license),
 		Fr(~tid_Enclave)
 	]--[
 		Binding(~tid_Enclave, ~id_Enclave, ~id_CPU)
@@ -151,7 +152,8 @@ rule Frank_1:
 	[
 		//TODO O que utilizar como C e p ? Os IDs de CPU e enclave? Repensar!
 		// !Enclave($C, $p, $MRENCLAVE, $MRSIGNER, ~nonce)
-		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER, license),
+		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
+		!License(~id_Enclave, license),
 		State_Enclave(~tid_Enclave, 'bound', <~id_Enclave, ~id_CPU>),
 		Fr(~hF)
 	]--[
@@ -203,7 +205,7 @@ rule Frank_3:
 		// // uid = <$prog,$eidA,$pidA>
 		// m7 = <qA,qB>
 
-		license = <~id_Enclave, sign(~id_Enclave, ~priv_IAS), pk(~priv_IAS)>
+		license = <~id_Enclave, ~id_IAS, sign(~id_Enclave, ~priv_IAS), pk(~priv_IAS)>
 
 		//certified_report = <avr_data, sign(avr_data, rsk)>
 		// certified_report = <avr_data, signature>
@@ -213,7 +215,8 @@ rule Frank_3:
 		AgSt('enclave', $F, '2', si),
 		State_Enclave(~tid_Enclave, 'attesting', <~id_Enclave, ~id_CPU>),
 		// !IAS_pub($IAS, pk(~rsk)), // assume IAS public key hardcoded
-		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER, license),
+		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
+		!License(~id_Enclave, license),
 		In(avr)
 		// In(senc(certified_report, ~session_key))
 	]--[
