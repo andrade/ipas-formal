@@ -12,18 +12,18 @@ builtins: hashing, signing, diffie-hellman
 builtins: asymmetric-encryption, symmetric-encryption
 
 functions:
+	MAC/2,
 	CMAC/2,                  // RFC 4493
 	SHA/1,
-	transport_key/3 [private], // source, destination, session nonce // rat
+	// transport_key/3 [private], // source, destination, session nonce // rat
 	//isk/0 [private],         // Intel Signing Key
 	//rsk/0 [private],         // Report Signing Key
 	real/1 [private],
 	sgx_get_key/1
 	//sgx_get_key/1 [private]  //TODO Why this doesn't work?
 
-// REVIEW
-rule Reveal:
-	[In(a),In(b),In(n)]--[Reveal()]->[Out(transport_key(a,b,n))]
+// rule Reveal:
+// 	[In(a),In(b),In(n)]--[Reveal()]->[Out(transport_key(a,b,n))]
 
 rule Create_IAS:
 	[
@@ -283,6 +283,8 @@ rule CAS_2_new:
 		// //523 quote = <content, sign(content, ~ak), cert>
 		so = <~tid_RA>
 		aep = <quote, ~subscription_key>
+
+		data = <aep, ~tid_RA, $CAS, $IAS>
 	in
 	[
 		// !CAS($RAS, ~subscription_key, ~ltk),
@@ -309,31 +311,34 @@ rule CAS_2_new:
 		// //Out(aenc(~ssk2, pub)),
 		// Out(senc(<quote, ~subscription_key>, ~server_session_key))
 
-		// Out(aep) // NOTE using encrypted
-		// FIXME replay attack, nonce?
-		Out(<~tid_RA, senc(aep, transport_key($CAS, $IAS, ~tid_RA))>)
-		// adversário pode substituir tid mas não obter chave: only DoS
+		// // Out(aep) // NOTE using encrypted
+		// // FIXME replay attack, nonce?
+		// Out(<~tid_RA, senc(aep, transport_key($CAS, $IAS, ~tid_RA))>)
+		// // adversário pode substituir tid mas não obter chave: only DoS
+		Out(<data, MAC(data, ~subscription_key)>)
 	]
 	//TODO forwarding or attesting ?
 
-// rule CAS_3_new:
-// 	let
-// 		// si = <~tid, ~client_session_key, ~server_session_key, ~ssk2>
-// 		si = <~tid_RA>
-// 	in
-// 	[
-// 		State_CAS(~tid_CAS, 'forwarding', <~id_CAS, ~tid_IAS, ~subscription_key>),
-// 		AgSt('CAS', $CAS, 'forwarding', si),
-// 		// In(senc(avr, ~ssk2))
-// 		// In(avr)
-// 		In(senc(avr, transport_key($IAS, $CAS, ~tid_RA)))
-// 	]--[
-// 		Progress_CAS_3(~tid_CAS, ~tid_IAS, ~tid_RA, avr)
-// 	]->[
-// 		State_CAS(~tid_CAS, 'idle', <~id_CAS, ~tid_IAS, ~subscription_key>),
-// 		// Out(senc(avr, ~client_session_key))
-// 		Out(avr)
-// 	]
+rule CAS_3_new:
+	let
+		// si = <~tid, ~client_session_key, ~server_session_key, ~ssk2>
+		si = <~tid_RA>
+		data_out = <avr, ~tid_RA, $IAS, $CAS>
+	in
+	[
+		State_CAS(~tid_CAS, 'forwarding', <~id_CAS, ~tid_IAS, ~subscription_key>),
+		AgSt('CAS', $CAS, 'forwarding', si),
+		// In(senc(avr, ~ssk2))
+		// In(avr)
+		// In(senc(avr, transport_key($IAS, $CAS, ~tid_RA)))
+		In(<data_out, MAC(data_out, ~subscription_key)>)
+	]--[
+		Progress_CAS_3(~tid_CAS, ~tid_IAS, ~tid_RA, avr)
+	]->[
+		State_CAS(~tid_CAS, 'idle', <~id_CAS, ~tid_IAS, ~subscription_key>),
+		// Out(senc(avr, ~client_session_key))
+		Out(avr)
+	]
 
 // REVIEW
 /**
@@ -344,6 +349,8 @@ rule CAS_2_new:
 **/
 rule IAS_new [color=DADADA]:
 	let
+		// data_in = <aep, ~tid_RA, $CAS, $IAS>
+
 		// //cert_QE = <pid, pk(~ak), $IAS, signature>
 		// //5 cert_QE = <$pid, pk(~ak), $IAS, sign(<$pid, pk(~ak), $IAS>, ~isk)>
 		// cert_QE = <$pid, pk(~ak), $IAS, signature>
@@ -371,6 +378,8 @@ rule IAS_new [color=DADADA]:
 		aep = <quote, ~subscription_key>     // quote||manifest||nonce
 		//3 aep = <content, sign(content, ~ak), cert_QE>
 
+		data_in = <aep, ~tid_RA, $CAS, $IAS>
+
 		// Attestation Verification Report
 		//quote_status = verify(qs,qb,ipk)
 		// quote_status, quote_body, etc in IAS spec... use correct names ??? TODO
@@ -381,6 +390,8 @@ rule IAS_new [color=DADADA]:
 		//aep = <content, sign(content, ~ak)>
 		//aep = <content, sign(content, ~ak), certificate>
 		//avr = <content, sign(content, rsk)>
+
+		data_out = <avr, ~tid_RA, $IAS, $CAS>
 	in
 	[
 		// !IAS($IAS, ~isk, ~rsk, ~ltk, ~subscription_key),
@@ -388,8 +399,10 @@ rule IAS_new [color=DADADA]:
 		// In(senc(aep, ~server_session_key))
 		!Keys_IAS(~id_IAS, ~priv_IAS),
 		State_IAS(~tid_IAS, 'idle', <~id_IAS, ~tid_CAS, ~subscription_key>),
-		// In(aep)
-		In(<~tid_RA, senc(aep, transport_key($CAS, $IAS, ~tid_RA))>)
+
+		// // In(aep)
+		// In(<~tid_RA, senc(aep, transport_key($CAS, $IAS, ~tid_RA))>)
+		In(<data_in, MAC(data_in, ~subscription_key)>)
 	]--[
 		Progress_IAS_new(~tid_IAS, ~tid_CAS, aep, avr),
 
@@ -400,8 +413,9 @@ rule IAS_new [color=DADADA]:
 		Eq(true, verify(sign(content, ~priv_QE), content, pk(~priv_QE)))
 	]->[
 		State_IAS(~tid_IAS, 'idle', <~id_IAS, ~tid_CAS, ~subscription_key>),
-		// Out(avr)
-		Out(senc(avr, transport_key($IAS, $CAS, ~tid_RA)))
+		// // Out(avr)
+		// Out(senc(avr, transport_key($IAS, $CAS, ~tid_RA)))
+		Out(<data_out, MAC(data_out, ~subscription_key)>)
 
 		// Out(senc(avr, ~server_session_key))
 		// Out(<$IAS,$RAS,senc(avr, ~server_session_key)>)
@@ -454,7 +468,7 @@ lemma Frank: exists-trace
 		tid_CPU tid_QE
 		tid_Enclave report quote tid_CAS tid_IAS tid_RA aep avr
 	#s1 #s2 #s3 #s4 #s5 #s6 #s7 #s8 #s9
-	#t1 #t2 #t3 #t4 #t5.// #t6 #t7.
+	#t1 #t2 #t3 #t4 #t5 #t6.// #t7.
 
 	Create_IAS(id_IAS) @ s1 &
 	Create_CAS(id_CAS) @ s2 &
@@ -474,12 +488,13 @@ lemma Frank: exists-trace
 	Progress_CAS_2(tid_CAS, tid_IAS, tid_RA, quote, aep) @ t4
 	&
 	Progress_IAS_new(tid_IAS, tid_CAS, aep, avr) @ t5 &
-	// Progress_CAS_3(tid_CAS, tid_IAS, tid_RA, avr) @ t6 &
+	Progress_CAS_3(tid_CAS, tid_IAS, tid_RA, avr) @ t6
+	// &
 	// Progress_F3(tid_Enclave, avr) @ t7
 
-	t1 < t5 & // partial deconstruction no IAS, ordem resolve? Nope!
+	// t1 < t5 & // partial deconstruction no IAS, ordem resolve? Nope!
 
-	(not (Ex #r. Reveal() @ r))
+	// (not (Ex #r. Reveal() @ r))
 	"
 
 end
