@@ -387,7 +387,13 @@ rule IAS_new [color=DADADA]:
 		// In(aep)
 		In(<~tid_RA, senc(aep, transport_key($CAS, $IAS, ~tid_RA))>)
 	]--[
-		Progress_IAS_new(~tid_IAS, ~tid_CAS, aep, avr)
+		Progress_IAS_new(~tid_IAS, ~tid_CAS, aep, avr),
+
+		// verify IAS signature over public key of QE
+		Eq(true, verify(sign(pk(~priv_QE), ~priv_IAS), pk(~priv_QE), pk(~priv_IAS))),
+
+		// verify QE signature over contents of quote
+		Eq(true, verify(sign(content, ~priv_QE), content, pk(~priv_QE)))
 	]->[
 		State_IAS(~tid_IAS, 'idle', <~id_IAS, ~tid_CAS, ~subscription_key>),
 		// Out(avr)
@@ -405,9 +411,9 @@ rule IAS_new [color=DADADA]:
 
 /******************************************************** */
 
-// restriction Equality:
-// 	"All x y #i. Eq(x,y)@i ==> x=y"
-//
+restriction Equality:
+	"All x y #i. Eq(x,y)@i ==> x=y"
+
 // restriction Inequality:
 // 	"All x #i. Neq(x,x) @i ==> F"
 
