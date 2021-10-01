@@ -21,6 +21,10 @@ functions:
 	sgx_get_key/1
 	//sgx_get_key/1 [private]  //TODO Why this doesn't work?
 
+// REVIEW
+rule Reveal:
+	[In(a),In(b),In(n)]--[Reveal()]->[Out(transport_key(a,b,n))]
+
 rule Create_IAS:
 	[
 		Fr(~id_IAS),
@@ -469,10 +473,13 @@ lemma Frank: exists-trace
 	&
 	Progress_CAS_2(tid_CAS, tid_IAS, tid_RA, quote, aep) @ t4
 	&
-	Progress_IAS_new(tid_IAS, tid_CAS, aep, avr) @ t5
-	// &
+	Progress_IAS_new(tid_IAS, tid_CAS, aep, avr) @ t5 &
 	// Progress_CAS_3(tid_CAS, tid_IAS, tid_RA, avr) @ t6 &
 	// Progress_F3(tid_Enclave, avr) @ t7
+
+	t1 < t5 & // partial deconstruction no IAS, ordem resolve? Nope!
+
+	(not (Ex #r. Reveal() @ r))
 	"
 
 end
