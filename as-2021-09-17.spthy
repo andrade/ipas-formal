@@ -131,7 +131,7 @@ rule Register_CAS:
 		Fr(~tid_CAS),
 		Fr(~subscription_key)
 	]--[
-		Register_CAS(~id_IAS, ~id_CAS, ~tid_IAS, ~tid_CAS)
+		Register_CAS(~id_CAS, ~id_IAS, ~tid_CAS, ~tid_IAS)
 	]->[
 		State_CAS(~tid_CAS, 'idle', <~id_CAS, ~tid_IAS, ~subscription_key>),
 		State_IAS(~tid_IAS, 'idle', <~id_IAS, ~tid_CAS, ~subscription_key>)
@@ -454,7 +454,7 @@ lemma setup: exists-trace
 
 	Create_QE(QE_3) @ #t51 & Provision(IAS, QE_3, CPU_3, tid_QE_3, tid_CPU_3) @ #t52 &
 
-	Create_CAS(CAS) @ #t61 & Register_CAS(IAS, CAS, tid_IAS, tid_CAS) @ #t62 &
+	Create_CAS(CAS) @ #t61 & Register_CAS(CAS, IAS, tid_CAS, tid_IAS) @ #t62 &
 
 	t31 < t32 & t32 < t33
 	"
@@ -479,7 +479,7 @@ lemma Frank: exists-trace
 	Provision(id_QE, id_CPU, id_IAS, tid_QE, tid_CPU) @ s6 &
 	Licensing(id_Enclave, id_IAS) @ s7 &
 	Binding(tid_Enclave, id_Enclave, id_CPU) @ s8 &
-	Register_CAS(id_IAS, id_CAS, tid_IAS, tid_CAS) @ s9 &
+	Register_CAS(id_CAS, id_IAS, tid_CAS, tid_IAS) @ s9 &
 
 	s1 < t1 & s1 < t2 & s1 < t3 & s1 < t4 & s1 < t5 & s1 < t6 & s1 < t7 &
 
