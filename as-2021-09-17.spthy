@@ -450,9 +450,9 @@ lemma setup: exists-trace
 
 	Create_Enclave(E3, MRENCLAVE_3, MRSIGNER_3) @ #t31 & Licensing(E3, IAS) @ #t32 & Binding(tid_E3, E3, CPU_3) @ #t33 &
 
-	Create_QE(QE_1) @ #t41 & Provision(IAS, QE_1, CPU_1, tid_QE_1, tid_CPU_1) @ #t42 &
+	Create_QE(QE_1) @ #t41 & Provision(QE_1, CPU_1, IAS, tid_QE_1, tid_CPU_1) @ #t42 &
 
-	Create_QE(QE_3) @ #t51 & Provision(IAS, QE_3, CPU_3, tid_QE_3, tid_CPU_3) @ #t52 &
+	Create_QE(QE_3) @ #t51 & Provision(QE_3, CPU_3, IAS, tid_QE_3, tid_CPU_3) @ #t52 &
 
 	Create_CAS(CAS) @ #t61 & Register_CAS(CAS, IAS, tid_CAS, tid_IAS) @ #t62 &
 
