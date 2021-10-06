@@ -500,6 +500,14 @@ lemma Frank: exists-trace
 	Progress_CAS_3(tid_CAS, tid_IAS, tid_RA, avr) @ t6 &
 	Progress_F3(tid_Enclave, avr) @ t7 &
 
+	s8 < t1 & // binding antes de Frank 1
+
+	s6 < t2 &
+
+	s9 < t4 & // registo antes de CAS 1
+
+	s2 < t5 & s9 < t5 &
+
 	t1 < t2 & t2 < t3 & t3 < t4 & t4 < t5 & t5 < t6 & t6 < t7
 
 	// t1 < t5 & // partial deconstruction no IAS, ordem resolve? Nope!
