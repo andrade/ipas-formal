@@ -281,7 +281,7 @@ rule CAS_2_new:
 		// // cert = <$pid, pk(~ak), $IAS, sign(<$pid, pk(~ak), $IAS>, ~isk)> // parte de baixo
 		// //TODO Não é necessário, apenas para ver se pattern funciona... problema do sig_QE no IAS
 		// //523 quote = <content, sign(content, ~ak), cert>
-		so = <~tid_RA>
+		// 10.6 so = <~tid_RA>
 		aep = <quote, ~subscription_key>
 
 		data = <aep, ~tid_RA, $CAS, $IAS>
@@ -304,8 +304,8 @@ rule CAS_2_new:
 	]--[
 		Progress_CAS_2(~tid_CAS, ~tid_IAS, ~tid_RA, quote, aep)
 	]->[
-		State_CAS(~tid_CAS, 'forwarding', <~id_CAS, ~tid_IAS, ~subscription_key>),
-		AgSt('CAS', $CAS, 'forwarding', so),
+		State_CAS(~tid_CAS, 'forwarding', <~id_CAS, ~tid_IAS, ~subscription_key, ~tid_RA>),
+		// 10.6 AgSt('CAS', $CAS, 'forwarding', so),
 		// AgSt('RAS', $RAS, 'forwarding', so),
 		// Out(aenc(<~server_session_key,~ssk2>, pub)),
 		// //Out(aenc(~ssk2, pub)),
@@ -322,12 +322,12 @@ rule CAS_2_new:
 rule CAS_3_new:
 	let
 		// si = <~tid, ~client_session_key, ~server_session_key, ~ssk2>
-		si = <~tid_RA>
+		// 10.6 si = <~tid_RA>
 		data_out = <avr, ~tid_RA, $IAS, $CAS>
 	in
 	[
-		State_CAS(~tid_CAS, 'forwarding', <~id_CAS, ~tid_IAS, ~subscription_key>),
-		AgSt('CAS', $CAS, 'forwarding', si),
+		State_CAS(~tid_CAS, 'forwarding', <~id_CAS, ~tid_IAS, ~subscription_key, ~tid_RA>),
+		// 10.6 AgSt('CAS', $CAS, 'forwarding', si),
 		// In(senc(avr, ~ssk2))
 		// In(avr)
 		// In(senc(avr, transport_key($IAS, $CAS, ~tid_RA)))
