@@ -468,7 +468,7 @@ lemma Frank: exists-trace
 		tid_CPU tid_QE
 		tid_Enclave report quote tid_CAS tid_IAS tid_RA aep avr
 	#s1 #s2 #s3 #s4 #s5 #s6 #s7 #s8 #s9
-	#t1 #t2 #t3 #t4 #t5 #t6.// #t7.
+	#t1 #t2 #t3 #t4 #t5 #t6 #t7.
 
 	Create_IAS(id_IAS) @ s1 &
 	Create_CAS(id_CAS) @ s2 &
@@ -481,16 +481,18 @@ lemma Frank: exists-trace
 	Binding(tid_Enclave, id_Enclave, id_CPU) @ s8 &
 	Register_CAS(id_IAS, id_CAS, tid_IAS, tid_CAS) @ s9 &
 
+	s1 < t1 & s1 < t2 & s1 < t3 & s1 < t4 & s1 < t5 & s1 < t6 & s1 < t7 &
+
 	Progress_F1(tid_Enclave, report) @ t1 &
 	Progress_QE_new_1(tid_QE, tid_CPU, report, quote) @ t2 &
 	Progress_F2(tid_Enclave, quote) @ t3
 	&
-	Progress_CAS_2(tid_CAS, tid_IAS, tid_RA, quote, aep) @ t4
-	&
+	Progress_CAS_2(tid_CAS, tid_IAS, tid_RA, quote, aep) @ t4 &
 	Progress_IAS_new(tid_IAS, tid_CAS, aep, avr) @ t5 &
-	Progress_CAS_3(tid_CAS, tid_IAS, tid_RA, avr) @ t6
-	// &
-	// Progress_F3(tid_Enclave, avr) @ t7
+	Progress_CAS_3(tid_CAS, tid_IAS, tid_RA, avr) @ t6 &
+	Progress_F3(tid_Enclave, avr) @ t7 &
+
+	t1 < t2 & t2 < t3 & t3 < t4 & t4 < t5 & t5 < t6 & t6 < t7
 
 	// t1 < t5 & // partial deconstruction no IAS, ordem resolve? Nope!
 
