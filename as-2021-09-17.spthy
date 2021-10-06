@@ -442,7 +442,15 @@ restriction OnlyOnce:
 // E1 e E2 são o mesmo enclave mas a executar em processadores diferentes: E1 no CPU_1, e E2 e E3 no CPU_3.
 lemma setup: exists-trace
 	"
-	Ex QE_1 QE_3 E1 E2 E3 MRENCLAVE_1 MRSIGNER_1 MRENCLAVE_3 MRSIGNER_3 tid_E1 tid_E2 tid_E3 tid_QE_1 tid_QE_3 tid_CPU_1 tid_CPU_3 IAS CPU_1 CPU_3 CAS tid_CAS tid_IAS #t11 #t12 #t13 #t21 #t22 #t23 #t31 #t32 #t33 #t41 #t42 #t51 #t52 #t61 #t62.
+	Ex
+		E1 E2 E3
+		MRENCLAVE_1 MRSIGNER_1 MRENCLAVE_3 MRSIGNER_3 tid_E1 tid_E2 tid_E3
+		IAS
+		CPU_1 CPU_3
+		QE_1 tid_QE_1 tid_CPU_1
+		QE_3 tid_QE_3 tid_CPU_3
+		CAS tid_CAS tid_IAS
+	#t11 #t12 #t13 #t21 #t22 #t23 #t31 #t32 #t33 #t41 #t42 #t51 #t52 #t61 #t62.
 
 	Create_Enclave(E1, MRENCLAVE_1, MRSIGNER_1) @ #t11 & Licensing(E1, IAS) @ #t12 & Binding(tid_E1, E1, CPU_1) @ #t13 &
 
