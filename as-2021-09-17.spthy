@@ -489,7 +489,7 @@ lemma Frank: exists-trace
 	Binding(tid_Enclave, id_Enclave, id_CPU) @ s8 &
 	Register_CAS(id_CAS, id_IAS, tid_CAS, tid_IAS) @ s9 &
 
-	s1 < t1 & s1 < t2 & s1 < t3 & s1 < t4 & s1 < t5 & s1 < t6 & s1 < t7 &
+	// s1 < t1 & s1 < t2 & s1 < t3 & s1 < t4 & s1 < t5 & s1 < t6 & s1 < t7 &
 
 	Progress_F1(tid_Enclave, report) @ t1 &
 	Progress_QE_new_1(tid_QE, tid_CPU, report, quote) @ t2 &
