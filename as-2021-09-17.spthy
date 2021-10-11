@@ -211,6 +211,11 @@ rule Frank_3:
 
 		license = <~id_Enclave, ~id_IAS, sign(~id_Enclave, ~priv_IAS), pk(~priv_IAS)>
 
+		data = <~hF>
+		body = <$F, ~id_CPU, ~MRENCLAVE, data>
+		//
+		content = <body>
+		avr_data = <'OK', content>
 		//certified_report = <avr_data, sign(avr_data, rsk)>
 		// certified_report = <avr_data, signature>
 		avr = <avr_data, sign(avr_data, ~priv_IAS)>
@@ -252,7 +257,7 @@ rule QE_new [color=AADADA]:
 		// Remover para suportar múltiplos enclaves TODO
 		// body = <$eid, $pid, $MRENCLAVE, data>
 		// report = <body, CMAC(body, report_key)>
-		data = <~hF>
+		// data = <~hF>
 		body = <$F, ~id_CPU, ~MRENCLAVE, data>
 		report = <body, CMAC(body, report_key)>
 
