@@ -150,12 +150,12 @@ rule Frank_3:
 	let
 		si = <~hF>
 
-		license = <~id_Enclave, ~id_IAS, sign(~id_Enclave, ~priv_IAS), pk(~priv_IAS)>
+		license = <~id_Enclave, ~id_IAS, sign(~id_Enclave, ~priv_IAS), pub_IAS>
 
 		data = <~hF>
 		body = <$F, ~id_CPU, ~MRENCLAVE, data>
 		content = <body>
-		report = <content, sign(content, ~priv_IAS)>
+		report = <content, signature>
 	in
 	[
 		AgSt('enclave', $F, '2', si),
@@ -164,7 +164,8 @@ rule Frank_3:
 		!License(~id_Enclave, license),
 		In(report)
 	]--[
-		Progress_F3(~tid_Enclave, $F, ~hF, report)
+		Progress_F3(~tid_Enclave, $F, ~hF, report),
+		Eq(true, verify(signature, content, pub_IAS))
 	]->[
 	]
 
