@@ -227,34 +227,7 @@ restriction OnlyOnce:
 	"All #i #j. OnlyOnce() @#i & OnlyOnce() @#j ==> #i = #j"
 
 
-// // E1 e E2 são o mesmo enclave mas a executar em processadores diferentes: E1 no CPU_1, e E2 e E3 no CPU_3.
-// lemma setup: exists-trace
-// 	"
-// 	Ex
-// 		E1 E2 E3
-// 		MRENCLAVE_1 MRSIGNER_1 MRENCLAVE_3 MRSIGNER_3 tid_E1 tid_E2 tid_E3
-// 		IAS
-// 		CPU_1 CPU_3
-// 		QE_1 tid_QE_1 tid_CPU_1
-// 		QE_3 tid_QE_3 tid_CPU_3
-// 		CAS tid_CAS tid_IAS
-// 	#t11 #t12 #t13 #t21 #t22 #t23 #t31 #t32 #t33 #t41 #t42 #t51 #t52 #t61 #t62.
-//
-// 	Create_Enclave(E1, MRENCLAVE_1, MRSIGNER_1) @ #t11 & Licensing(E1, IAS) @ #t12 & Binding(tid_E1, E1, CPU_1) @ #t13 &
-//
-// 	Create_Enclave(E2, MRENCLAVE_1, MRSIGNER_1) @ #t21 & Licensing(E2, IAS) @ #t22 & Binding(tid_E2, E2, CPU_3) @ #t23 &
-//
-// 	Create_Enclave(E3, MRENCLAVE_3, MRSIGNER_3) @ #t31 & Licensing(E3, IAS) @ #t32 & Binding(tid_E3, E3, CPU_3) @ #t33 &
-//
-// 	Create_QE(QE_1) @ #t41 & Provision(QE_1, CPU_1, IAS, tid_QE_1, tid_CPU_1) @ #t42 &
-//
-// 	Create_QE(QE_3) @ #t51 & Provision(QE_3, CPU_3, IAS, tid_QE_3, tid_CPU_3) @ #t52 &
-//
-// 	Create_CAS(CAS) @ #t61 & Register_CAS(CAS, IAS, tid_CAS, tid_IAS) @ #t62 &
-//
-// 	t31 < t32 & t32 < t33
-// 	"
-
+// E1 e E2 são o mesmo enclave mas a executar em processadores diferentes: E1 no CPU_1, e E2 e E3 no CPU_3.
 lemma Multi: exists-trace
 	"
 	Ex
@@ -270,6 +243,7 @@ lemma Multi: exists-trace
 
 	not(id_CPU_1=id_CPU_3) &
 	not(id_QE_1=id_QE_3) &
+	E1=E2 & not(E2=E3) &
 	not(tid_E1=tid_E2) &
 	not(tid_E2=tid_E3) &
 	not(MRENCLAVE_1=MRENCLAVE_3) &
