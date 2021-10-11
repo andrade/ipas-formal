@@ -254,7 +254,61 @@ restriction OnlyOnce:
 // 	t31 < t32 & t32 < t33
 // 	"
 
-// Provar caminho ...
+lemma Multi: exists-trace
+	"
+	Ex
+		id_CPU_1 tid_CPU_1 MRENCLAVE_1 MRSIGNER_1 id_QE_1 tid_QE_1
+		id_CPU_3 tid_CPU_3 MRENCLAVE_3 MRSIGNER_3 id_QE_3 tid_QE_3
+		E1 tid_E1 X h1 r1 q1 a1
+		E2 tid_E2 Y h2 r2 q2 a2
+		E3 tid_E3 Z h3 r3 q3 a3
+		id_IAS
+	#s11 #s12 #s13 #s14 #s15 #s16 #s17 #s18
+	#s21 #s22 #s23 #s24 #s25 #s26 #s27 #s28
+	#t1 #t2 #t3 #t4 #t5 #t6 #t7 #t8 #t9 #t10 #t11 #t12 #t13 #t14 #t15.
+
+	not(id_CPU_1=id_CPU_3) &
+	not(id_QE_1=id_QE_3) &
+	not(tid_E1=tid_E2) &
+	not(tid_E2=tid_E3) &
+	not(MRENCLAVE_1=MRENCLAVE_3) &
+	not(MRSIGNER_1=MRSIGNER_3) &
+
+	Create_IAS(id_IAS) @ s11 &
+	Create_QE(id_QE_1) @ s12 &
+	Create_QE(id_QE_3) @ s13 &
+	Create_CPU(id_CPU_1) @ s14 &
+	Create_CPU(id_CPU_3) @ s15 &
+	Create_Enclave(E1, MRENCLAVE_1, MRSIGNER_1) @ s16 &
+	Create_Enclave(E2, MRENCLAVE_1, MRSIGNER_1) @ s17 &
+	Create_Enclave(E3, MRENCLAVE_3, MRSIGNER_3) @ s18 &
+
+	Provision(id_QE_1, id_CPU_1, id_IAS, tid_QE_1, tid_CPU_1) @ s21 &
+	Provision(id_QE_3, id_CPU_3, id_IAS, tid_QE_3, tid_CPU_3) @ s22 &
+	Licensing(E1, id_IAS) @ s23 &
+	Licensing(E2, id_IAS) @ s24 &
+	Licensing(E3, id_IAS) @ s25 &
+	Binding(tid_E1, E1, id_CPU_1) @ s26 &
+	Binding(tid_E2, E2, id_CPU_3) @ s27 &
+	Binding(tid_E3, E3, id_CPU_3) @ s28 &
+
+	Progress_F1(tid_E1, X, h1, r1) @ t1 &
+	Progress_F1(tid_E2, Y, h2, r2) @ t2 &
+	Progress_F1(tid_E3, Z, h3, r3) @ t3 &
+	Progress_QE(tid_QE_1, tid_CPU_1, r1, q1) @ t4 &
+	Progress_QE(tid_QE_3, tid_CPU_3, r2, q2) @ t5 &
+	Progress_QE(tid_QE_3, tid_CPU_3, r3, q3) @ t6 &
+	Progress_F2(tid_E1, X, h1, q1) @ t7 &
+	Progress_F2(tid_E2, Y, h2, q2) @ t8 &
+	Progress_F2(tid_E3, Z, h3, q3) @ t9 &
+	Progress_IAS(id_IAS, q1, a1) @ t10 &
+	Progress_IAS(id_IAS, q2, a2) @ t11 &
+	Progress_IAS(id_IAS, q3, a3) @ t12 &
+	Progress_F3(tid_E1, X, h1, a1) @ t13 &
+	Progress_F3(tid_E2, Y, h2, a2) @ t14 &
+	Progress_F3(tid_E3, Z, h3, a3) @ t15
+	"
+
 lemma Frank: exists-trace
 	"
 	Ex
