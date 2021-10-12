@@ -1,0 +1,1632 @@
+/**
+** Protocol: AS v3
+** Author:   Daniel Andrade
+** Date:     03/2021
+** Status:   WIP
+**/
+
+theory ASv3
+begin
+
+builtins: hashing, signing
+builtins: asymmetric-encryption, symmetric-encryption
+
+functions:
+	CMAC/2,                  // RFC 4493
+	SHA/1,
+	// transport_key/3 [private], // source, destination, session nonce // rat
+	//isk/0 [private],         // Intel Signing Key
+	//rsk/0 [private],         // Report Signing Key
+	real/1 [private],
+	sgx_get_key/1
+	//sgx_get_key/1 [private]  //TODO Why this doesn't work?
+
+// IAS and RAS share subscription key
+rule SharedKey:
+	[ Fr(~k) ] --> [ SharedKey1($p, ~k), SharedKey2($q, ~k) ]
+//FIXME Mesma shared key fact name problemático! *********** FIXME
+
+// // Register a public-key pair
+// rule Register_pk:
+// 	[ Fr(~ltk) ] --> [ !Ltk($id, ~ltk), !Pk($id, pk(~ltk)) ]
+//
+// // Adversary can read any public key
+// rule Get_pk:
+// 	[ !Pk(id, pub) ] --> [ Out(pub) ]
+//
+// rule Reveal_ltk:
+// 	[ !Ltk(id, ltk) ] --> [ Out(ltk) ]
+
+rule Create_IAS:
+	[
+		Fr(~id_IAS),
+		// !Ltk($IAS, ~priv_IAS)
+		Fr(~priv_IAS)
+	]--[
+		OnlyOnce(),
+		Create_IAS(~id_IAS)
+	]->[
+		!ID_IAS(~id_IAS),
+		!Keys_IAS(~id_IAS, ~priv_IAS), // root keys, we use single key pair
+		Out(~id_IAS)
+	]
+
+rule Create_CAS:
+	[ Fr(~id_CAS) ]--[ Create_CAS(~id_CAS) ]->[ !ID_CAS(~id_CAS), Out(~id_CAS) ]
+
+rule Create_QE:
+	[ Fr(~id_QE) ]--[ Create_QE(~id_QE) ]->[ !ID_QE(~id_QE), Out(~id_QE) ]
+
+rule Create_Enclave:
+	[
+		Fr(~id_Enclave),
+		Fr(~MRENCLAVE),
+		Fr(~MRSIGNER)
+	]--[
+		Create_Enclave(~id_Enclave, ~MRENCLAVE, ~MRSIGNER)
+	]->[
+		!ID_Enclave(~id_Enclave),
+		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER, 'NULL'), // REVIEW awk design
+		Out(~id_Enclave),
+		Out(~MRENCLAVE),
+		Out(~MRSIGNER)
+	]
+
+/* Old version w/ proc
+// útil para ter algo que identifique a key hierarchy única do processador
+rule Create_Processor:
+	[
+		Fr(~id_Processor)
+	]--[
+		Create_Processor(~id_Processor)
+	]->[
+		!ID_Processor(~id_Processor),
+		Out(~id_Processor)
+	]
+*/
+
+rule Create_CPU:
+	[
+		Fr(~id_CPU)
+	]--[
+		Create_CPU(~id_CPU)
+	]->[
+		!ID_CPU(~id_CPU),
+		Out(~id_CPU)
+	]
+
+// Provision CPU and QE: essentially registers these two agents with Intel
+rule Provisioning:
+	[
+		!ID_IAS(~id_IAS),
+		!Keys_IAS(~id_IAS, ~priv_IAS),
+		!ID_QE(~id_QE),
+		!ID_CPU(~id_CPU),
+		Fr(~tid_QE),
+		Fr(~priv_QE), // attestation key for QE, uses to sign quotes
+		Fr(~tid_CPU)
+	]--[
+		Provision(~id_QE, ~id_CPU, ~id_IAS, ~tid_QE, ~tid_CPU)
+	]->[
+		State_QE(~tid_QE, 'idle', <~id_QE, ~tid_CPU, ~id_CPU, ~id_IAS, ~priv_QE, sign(pk(~priv_QE), ~priv_IAS), pk(~priv_IAS)>),
+		State_CPU(~tid_CPU, 'Provisioning_CPU', <~id_CPU, ~tid_QE, ~id_QE, ~id_IAS, sign(~id_CPU, ~priv_IAS), pk(~priv_IAS)>)
+	]
+
+// Whitelist enclave
+rule Licensing:
+	let
+		// Enclave ID, IAS signature over Enclave ID, IAS public key
+		license = <~id_Enclave, sign(~id_Enclave, ~priv_IAS), pk(~priv_IAS)>
+	in
+	[
+		!ID_IAS(~id_IAS),
+		!Keys_IAS(~id_IAS, ~priv_IAS),
+		!ID_Enclave(~id_Enclave),
+		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER, 'NULL')
+	]--[
+		Licensing(~id_Enclave, ~id_IAS)
+	]->[
+		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER, license)
+	]
+
+// Bind enclave to CPU
+// FIXME: Enclave deve ter lá os MR ?? TODO: acho que sim para poder fork igual
+rule Binding:
+	[
+		!ID_CPU(~id_CPU),
+		!ID_Enclave(~id_Enclave),
+		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER, license),
+		Fr(~tid_Enclave)
+	]--[
+		Binding(~tid_Enclave, ~id_Enclave, ~id_CPU)
+	]->[
+		State_Enclave(~tid_Enclave, 'bound', <~id_Enclave, ~id_CPU>)
+	]
+
+// // NOTE LA melhor estar no QE...?
+// rule Attest:
+// 	[
+// 	]--[
+// 	]->[
+// 	]
+
+// TODO Acho que teremos N RAS para N QE, como modelar isto, onde crio tid_IAS que aparece também em Register_QE? (possivelmente num local e depois input do estado para o outro?)
+// TODO Talvez mudar nome para associate em vez de register? E é preciso a key!
+rule Register_CAS:
+	[
+		!ID_IAS(~id_IAS),
+		!ID_CAS(~id_CAS),
+		Fr(~tid_IAS),
+		Fr(~tid_CAS),
+		Fr(~subscription_key)
+	]--[
+		Register_CAS(~id_IAS, ~id_CAS, ~tid_IAS, ~tid_CAS)
+	]->[
+		State_CAS(~tid_CAS, 'idle', <~id_CAS, ~tid_IAS, ~subscription_key>),
+		State_IAS(~tid_IAS, 'idle', <~id_IAS, ~tid_CAS, ~subscription_key>)
+	]
+
+/*
+// Associate QE with a CPU and with IAS
+// Temos id_Processor que vincula QE a um processador específico (IAS não: IAS comunica com QE e é QE que está bound a um CPU)
+// Temos tid_IAS que vincula este QE a uma thread específica do IAS
+// Cria-se um par de chaves para o QE ficando o IAS com cópia da chave pública de forma a simular a infraestrutura de atestação
+rule Register_QE:
+	[
+		!ID_IAS(~id_IAS),
+		!ID_QE(~id_QE),
+		!ID_Processor(~id_Processor),
+		Fr(~tid_QE),
+		Fr(~tid_IAS),
+		Fr(~ak)
+	]--[
+		Register_QE(~id_IAS, ~id_QE, ~id_Processor, ~tid_IAS, ~tid_QE)
+	]->[
+		State_QE(~tid_QE, 'Register_QE', <~id_QE, ~id_Processor, ~tid_IAS, ~ak>),
+		State_IAS(~tid_IAS, 'Register_QE', <~id_IAS, ~tid_QE, pk(~ak)>)
+	]
+*/
+
+/* Old version w/ proc
+// Bind enclave to a CPU (not with QE since QE and CPU already bound)
+rule Register_Enclave:
+	[
+		!ID_IAS(~id_Enclave),
+		!ID_Processor(~id_Processor),
+		Fr(~tid_Enclave)
+	]--[
+		Neq($MRENCLAVE, $MRSIGNER),
+		Register_Enclave(~id_Enclave, ~id_Processor, ~tid_Enclave)
+	]->[
+		State_Enclave(~tid_Enclave, 'Register_Enclave', <~id_Enclave, ~id_Processor, $MRENCLAVE, $MRSIGNER>)
+	]
+*/
+
+// rule Bind_QE_to_Processor:
+// 	[
+// 		!ID_QE(~id_QE),
+// 		!ID_Processor(~id_Processor),
+// 		Fr(~tid_QE)
+// 	]--[
+// 		Bind_QE(~id_QE, ~id_Processor, ~tid_QE)
+// 	]->[
+// 		State_QE(~tid_QE, 'Bind_QE', <~id_QE, ~id_Processor>)
+// 	]
+
+
+
+rule Frank_1:
+	let
+		// report_key = sgx_get_key(<~MRENCLAVE, 'report', ~nonce>)
+		report_key = sgx_get_key(<~MRENCLAVE, 'report', real(~id_CPU)>)
+
+		// TODO Usar `real(id_CPU)` ou coisa parecida?
+		// Posso depois experimentar ter isto num create, e fazer create desse agente (placeholder) falso para ver se adversário consegue invocar regra mas sem a função...
+
+		data = <~hF>
+		body = <$F, ~id_CPU, ~MRENCLAVE, data>
+		report = <body, CMAC(body, report_key)>
+
+		so = <~hF>
+	in
+	[
+		//TODO O que utilizar como C e p ? Os IDs de CPU e enclave? Repensar!
+		// !Enclave($C, $p, $MRENCLAVE, $MRSIGNER, ~nonce)
+		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER, license),
+		State_Enclave(~tid_Enclave, 'bound', <~id_Enclave, ~id_CPU>),
+		Fr(~hF)
+	]--[
+		Progress_F1(~tid_Enclave, $F, ~hF, report)
+	]->[
+		State_Enclave(~tid_Enclave, 'started', <~id_Enclave, ~id_CPU>),
+		AgSt('enclave', $F, '1', so),
+		Out(report)
+	]
+
+rule Frank_2:
+	let
+		si = <~hF>
+		so = <~hF>
+
+		// cert = <$pid, pk(~ak), $IAS, sign(<$pid, pk(~ak), $IAS>, ~isk)> // parte de baixo
+		//TODO Não é necessário, apenas para ver se pattern funciona... problema do sig_QE no IAS
+		//523 quote = <content, sign(content, ~ak), cert>
+
+		//TEMP: desnecessário:
+		// quote = <content, sign(content, ~ak), cert>
+		//FIXME check this okay **** 11
+		quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
+	in
+	[
+		AgSt('enclave', $F, '1', si),
+		State_Enclave(~tid_Enclave, 'started', <~id_Enclave, ~id_CPU>),
+		// !Enclave($C, $p, $MRENCLAVE, $MRSIGNER, ~nonce),
+		// !Pk($RAS, pub),
+		// Fr(~session_key),
+		In(quote)
+	]--[
+		Progress_F2(~tid_Enclave, $F, ~hF, quote)
+	]->[
+		AgSt('enclave', $F, '2', so),
+		State_Enclave(~tid_Enclave, 'attesting', <~id_Enclave, ~id_CPU>),
+		Out(quote)
+		//TODO quote tem thread ID? E enviar através de túnel TLS? (enviar fora de túnel OK sinigifca que mais robusto do que com túnel, portanto assumption stronger in model)
+		// Out(aenc(~session_key, pub)),
+		// Out(senc(quote, ~session_key))
+	]
+
+//[color=DAAADA]
+rule Frank_3:
+	let
+		si = <~hF>
+		// // uid = <$prog,$eidA,$pidA>
+		// m7 = <qA,qB>
+
+		license = <~id_Enclave, sign(~id_Enclave, ~priv_IAS), pk(~priv_IAS)>
+
+		//certified_report = <avr_data, sign(avr_data, rsk)>
+		// certified_report = <avr_data, signature>
+		avr = <avr_data, sign(avr_data, ~priv_IAS)>
+	in
+	[
+		AgSt('enclave', $F, '2', si),
+		State_Enclave(~tid_Enclave, 'attesting', <~id_Enclave, ~id_CPU>),
+		// !IAS_pub($IAS, pk(~rsk)), // assume IAS public key hardcoded
+		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER, license),
+		In(avr)
+		// In(senc(certified_report, ~session_key))
+	]--[
+		Progress_F3(~tid_Enclave, $F, ~hF, avr)
+		// Eq(true, verify(signature, avr_data, pk(~rsk)))
+	]->[
+	]
+
+
+
+////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+
+// rule Create_IAS_old:
+// 	[ Fr(~id_IAS) ]--[ Create_IAS(~id_IAS) ]->[ !ID_IAS(~id_IAS), Out(~id_IAS) ]
+//
+// rule Register_Intel [color=DADADA]:
+// 	// let
+// 	// 	ipk = pk(isk)              // Intel Public Key
+// 	// 	rpk = pk(rsk)              // Report Public Key
+// 	// in
+// 	[
+// 		!ID_IAS(~id_IAS),
+// 		Fr(~isk),                   // Intel Signing Key
+// 		Fr(~rsk),                   // Report Signing Key
+// 		!Ltk($IAS, ~ltk),             // TLS
+// 		SharedKey1($IAS, ~k)         // subscription key (allows only one RAS)
+// 	]--[
+// 		OnlyOnce(),
+// 		Secret(~isk),
+// 		Secret(~rsk)
+// 	]->[
+// 		!IAS($IAS, ~isk, ~rsk, ~ltk, ~k),
+// 		!IASv2(~id_IAS),  //TODO remove
+// 		!IAS_pub($IAS, pk(~isk)),
+// 		!IAS_pub($IAS, pk(~rsk))
+// 		// ,
+// 		// Out(pk(rsk))  // Give the Report Public Key to all entities
+// 	]
+//
+// /*
+// rule Register_CAS:
+// 	[
+// 		SharedKey2($RAS, ~subscription_key),
+// 		!Ltk($RAS, ~ltk)
+// 	] --> [
+// 		!CAS($RAS, ~subscription_key, ~ltk)
+// 	]
+// 	//[ SharedKey2($id, ~k) ] --> [ !RAS($id, ~k) ]
+// */
+//
+// rule Register_QE_old [color=AADADA]:
+// 	let
+// 		// subject name, subject key, issuer name, signature
+// 		cert = <$pid, pk(~ak), $IAS, sign(<$pid, pk(~ak), $IAS>, ~isk)>
+// 	in
+// 	[
+// 		!IAS($IAS, ~isk, ~rsk, ~ltk, ~k),
+// 		Fr(~ak),
+// 		Fr(~nonce)
+// 	]--[
+// 		Secret(~isk),
+// 		Secret(~rsk),
+// 		Secret(~ak)
+// 	]->[
+// 		!QE($pid, ~ak, cert, ~nonce)
+// 	]
+//
+// rule Register_Enclave_old [color=FFCCAA]:
+// 	// let
+// 	// 	//metadata = <$MRENCLAVE, $MRSIGNER>
+// 	//
+// 	// 	//NOTE Obtida de função Get_Key
+// 	// 	//1 report_key = sgx_get_key(<$eid,$pid,metadata,'report'>)
+// 	// in
+// 	[
+// 		!QE($pid, ~ak, cert, ~nonce)
+// 		// ~nonce é suposto ser key hierarchy? NOTE
+// 	]--[
+// 		Neq($MRENCLAVE, $MRSIGNER),
+// 		Secret(~ak)
+// 	]->[
+// 		!Enclave($eid, $pid, $MRENCLAVE, $MRSIGNER, ~nonce)
+// 	]
+// //
+// // rule Register_Enclave:
+// // 	[
+// // 		!QE($pid,~ak,cert)
+// // 	]-->[
+// // 		!Enclave($eid,$pid)
+// // 	]
+//
+// // rule Get_Key:
+// // 	[
+// // 		In(<$eid,$pid,metadata,type>) // e.g. type='report'
+// // 	]--[
+// // 	]->[
+// // 		Out(sgx_get_key(<$eid,$pid,metadata,type>))
+// // 	]
+//
+// // rule Register_Program:
+// // 	[
+// // 		!Enclave($eid,$pid,metadata)
+// // 	]-->[
+// // 		!Enclave($eid,$pid,metadata),
+// // 		!Program($prog,$eid,$pid)
+// // 	]
+//
+// // /**
+// // ** Send tagged report to the network.
+// // **/
+// // rule Enclave_1:
+// // 	let
+// // 		request = <$prog,$eid,$pid,'report'>
+// // 		report_key = sgx_get_key(request)
+// // 		data = <$prog,$eid,$pid,~user_data>
+// //
+// // 		m = <data,CMAC(data,report_key)>
+// // 	in
+// // 	[
+// // 		!Program($prog,$eid,$pid),
+// //
+// // 		Fr(~user_data)
+// // 	]--[
+// // 		Enclave_O1(m)
+// // 	]->[
+// // 		Out(m)
+// // 	]
+// //
+// // rule Enclave_2:
+// // 	[
+// // 		!Program($prog,$eid,$pid),
+// // 		In(<report,sig>),
+// // 		In(rpk)
+// // 	]--[
+// // 		Enclave_I2(report),
+// // 		Eq(verify(sig,report,rpk),true)  // Verify IAS signed report
+// // 	]->[
+// // 	]
+//
+// rule Alice_1:
+// 	let
+// 		so = <~seed_Alice, ~tid_Alice>
+// 	in
+// 	[
+// 		!Enclave($A, $p, $MRENCLAVE, $MRSIGNER, ~seed_Alice),
+// 		Fr(~tid_Alice)
+// 	]--[
+// 		Progress_A1(~tid_Alice, ~seed_Alice)
+// 	]->[
+// 		AgSt('enclave', $A, 'start', so),
+// 		Out(~tid_Alice)
+// 	]
+//
+// rule Alice_2:
+// 	let
+// 		si = <~seed_Alice, ~tid_Alice>
+// 		so = <~tid_Alice, ~tid_Boris, gid_Boris>
+//
+// 		gid_Alice = '0'
+// 	in
+// 	[
+// 		// !Enclave($A, $p, $MRENCLAVE, $MRSIGNER, ~nonce),
+// 		AgSt('enclave', $A, 'start', si),
+// 		In(<~tid_Boris, gid_Boris>)
+// 	]--[
+// 		Progress_A2(~seed_Alice, ~tid_Alice, gid_Alice, ~tid_Boris, gid_Boris)
+// 	]->[
+// 		AgSt('enclave', $A, 'foo', so),
+// 		Out(<~tid_Alice, gid_Alice>),
+// 		Out(<~tid_Alice, gid_Boris>)
+// 	]
+//
+// rule Boris_1:
+// 	let
+// 		gid_Boris = '0'
+// 		so = <~tid_Boris>
+// 	in
+// 	[
+// 		!Enclave($B, $q, $MRENCLAVE, $MRSIGNER, ~seed_Boris),
+// 		In(~tid_Alice),
+// 		Fr(~tid_Boris)
+// 	]--[
+// 		Progress_B1(~tid_Alice, ~tid_Boris, gid_Boris, ~seed_Boris)
+// 	]->[
+// 		AgSt('enclave', $B, 'start', so),
+// 		Out(<~tid_Boris, gid_Boris>)
+// 	]
+//
+// //[color=DAAADA]
+// rule Alice_11:
+// 	let
+// 		report_key = sgx_get_key(<$MRENCLAVE, 'report', ~nonce>)
+//
+// 		data = <'hA'>
+// 		//body = <$A, $p, md, data>
+// 		body = <$A, $p, $MRENCLAVE, data>
+// 		report = <body, CMAC(body, report_key)>
+//
+// 		so = <'hA'>
+// 	in
+// 	[
+// 		!Enclave($A, $p, $MRENCLAVE, $MRSIGNER, ~nonce)
+// 	]--[
+// 		Progress_A11(report),
+// 		Alice_O1($A, report),
+// 		Secret(report_key)
+// 	]->[
+// 		AgSt('enclave1', $A, '1', so),
+// 		Out(report)
+// 	]
+//
+// //[color=DAAADA]
+// rule Alice_12:
+// 	// let
+// 	// 	//FIXME get body her to extract hB and compare with hA in Eq
+// 	// 	d = <hB> //2
+// 	// 	b = <$B,$p2,md,d> //2
+// 	// 	//1 qB = <<<b,cert>,sig>,t>
+// 	// 	qB = <<b,cert>,t> //2
+// 	// 	//m4 = <pubB,~nB,quoteB>
+// 	// 	//m4 = <pubB,~nB,qB>
+// 	// 	m4 = <$B,$A,pubB,~nB,qB>
+// 	// 	// uid = <$prog,$eidA,$pidA>
+// 	//
+// 	//
+// 	// 	// shared_secret = pubB^~ltkA
+// 	// 	// KDK = CMAC(shared_secret,'0x00')
+// 	// 	// SMK = CMAC(<'0x01','SMK','0x00','0x80','0x00'>,KDK)
+// 	// 	// VK = CMAC(<'0x01','VK','0x00','0x80','0x00'>,SMK)
+// 	// 	// hA = SHA(<'g'^~ltkA,pubB,VK>)
+// 	// 	// h is sent as user data within the report
+// 	// 	hA = SHA(<'g'^~ltkA,pubB>) //TEMP
+// 	//
+// 	// 	// prepare report for QE
+// 	// 	///request = <$A,$p1,md,'report'>
+// 	// 	///report_key = sgx_get_key(request)
+// 	// 	data = <hA>                            // sgx_report_data_t
+// 	// 	body = <$A,$p1,md,data>       // sgx_report_body_t
+// 	// 	report = <body,CMAC(body,report_key)> // sgx_report_t
+// 	// in
+// 	let
+// 		si = <'hA'>
+// 		so = <'hA', ~session_key>
+//
+// 		// cert = <$pid, pk(~ak), $IAS, sign(<$pid, pk(~ak), $IAS>, ~isk)> // parte de baixo
+// 		//TODO Não é necessário, apenas para ver se pattern funciona... problema do sig_QE no IAS
+// 		//523 quote = <content, sign(content, ~ak), cert>
+//
+// 		//TEMP: desnecessário:
+// 		quote = <content, sign(content, ~ak), cert>
+// 	in
+// 	[
+// 		AgSt('enclave1', $A, '1', si),
+// 		!Enclave($A, $p, $MRENCLAVE, $MRSIGNER, ~nonce),
+// 		!Pk($RAS, pub),
+// 		Fr(~session_key),
+// 		In(quote)
+// 	]--[
+// 		Progress_A12(quote),
+// 		Alice_I2($A, quote),
+// 		Alice_O2($A, quote),
+// 		Eq(quote,quote)
+// 	]->[
+// 		AgSt('enclave1', $A, '2', so),
+// 		//Out(quote)
+// 		//Out(<quote, '1111'>)
+// 		Out(aenc(~session_key, pub)),
+// 		Out(senc(quote, ~session_key))
+// 	]
+//
+// //[color=DAAADA]
+// rule Alice_13:
+// 	let
+// 		si = <'hA', ~session_key>
+// 		// // uid = <$prog,$eidA,$pidA>
+// 		// m7 = <qA,qB>
+//
+// 		//certified_report = <avr_data, sign(avr_data, rsk)>
+// 		certified_report = <avr_data, signature>
+// 	in
+// 	[
+// 		AgSt('enclave1', $A, '2', si),
+// 		!Enclave($A, $p, $MRENCLAVE, $MRSIGNER, ~nonce),
+// 		!IAS_pub($IAS, pk(~rsk)), // assume IAS public key hardcoded
+// 		//524 In(certified_report)
+// 		In(senc(certified_report, ~session_key))
+// 		//1 In(senc(<certified_report>, ~client_session_key))
+// 	]--[
+// 		Progress_A13(certified_report),
+// 		Alice_I3($A, certified_report),
+// 		Eq(true, verify(signature, avr_data, pk(~rsk)))
+// 		//,Alice_O3($A,m7)
+// 	]->[
+// 		// State_E2(<~ltkA,~nA,pubB,~nB,KDK,SMK,VK,hA,quoteA,quoteB>),
+// 		// Alice_3( ~alice, ~ltkA,~nA,hA,quoteA, pubB,~nB,quoteB, KDK,SMK,VK ),
+// 		//AgSt($A, <~ltkA,~nA,quoteA,quoteB>),
+// 		//Out(m7) // commented? FIXME these two lines?
+// 	]
+//
+// // rule Alice_14:
+// // 	let
+// // 		m10 = <rA,rB>
+// // 		m11 = <rA,rB>
+// // 		//uid = <$prog,$eidA,$pidA>
+// // 	in
+// // 	[
+// // 		!Enclave($A,$p1,md,report_key),
+// // 		// !Program($prog,$eidA,$pidA),
+// // 		In(m10),
+// // 		//State_E2(<~ltkA,~nA,pubB,~nB,KDK,SMK,VK,hA,qA,qB>)
+// // 		// Alice_3( ~alice, ~ltkA,~nA,hA,quoteA, pubB,~nB,quoteB, KDK,SMK,VK )
+// // 		AgSt($A, <~ltkA,~nA,quoteA,quoteB>)
+// // 	]--[
+// // 		Alice_I4($A,m10),
+// // 		Alice_O4($A,m11)
+// // 		//TODO At this point validate reports and derive MK/SK
+// // 	]->[
+// // 		//State_E2(<~ltkA,~nA,pubB,~nB,KDK,SMK,VK,hA,qA,qB,rA,rB>),
+// // 		//NOTE No State neede after this, ends here ????
+// // 		Out(m11)
+// // 	]
+//
+// // rule Boris_1:
+// // 	let
+// // 		//m1 = <pubA,~nA>
+// // 		m1 = <$A,$B,pubA,~nA>
+// //
+// // 		pubB = 'g'^~ltkB  // public key of enclave B
+// //
+// // 		// shared_secret = pubA^~ltkB
+// // 		// KDK = CMAC(shared_secret,'0x00')
+// // 		// SMK = CMAC(<'0x01','SMK','0x00','0x80','0x00'>,KDK)
+// // 		// VK = CMAC(<'0x01','VK','0x00','0x80','0x00'>,SMK)
+// // 		// hB = SHA(<pubA,pubB,VK>)
+// // 		// hB is sent as user data within the report
+// // 		hB = SHA(<pubA,pubB>) //TEMP
+// //
+// // 		//request = <$prog,$eidB,$pidB,'report'>
+// // 		//request = <$B,$p2,md,'report'>
+// // 		//report_key = sgx_get_key(request)
+// // 		data = <hB>                           // sgx_report_data_t
+// // 		body = <$B,$p2,md,data>       // sgx_report_body_t
+// // 		report = <body,CMAC(body,report_key)> // sgx_report_t
+// //
+// // 		m2 = report
+// // 	in
+// // 	[
+// // 		!Enclave($B,$p2,md,report_key),
+// // 		// !Program($prog,$eidB,$pidB),
+// // 		//Fr(~boris),
+// // 		// se substituir isto por dois Fr já funciona, FIXME:
+// // 		In(m1),
+// // 		Fr(~ltkB),
+// // 		Fr(~nB)
+// // 	]--[
+// // 		Boris_I1($B,m1),
+// // 		Boris_O1($B,m2)
+// // 	]->[
+// // 		// State_E2(<~ltkB,~nB,pubA,~nA,KDK,SMK,VK,h>),
+// // 		// Boris_1( ~boris, ~ltkB,~nB,h, pubA,~nA, KDK,SMK,VK ),
+// // 		AgSt($B, <~ltkB,~nB>),
+// // 		//Out(<'g'^~ltkB,~nB,m>)
+// // 		Out(m2)
+// // 	]
+// //
+// // rule Boris_2:
+// // 	let
+// // 		pubB = 'g'^~ltkB
+// //
+// // 		// d = <report_data>
+// // 		// b = <$prog,$eidB,$pidB,d>
+// // 		// m = <$prog,$eidB,$pidB,b,cert>
+// // 		// qB = <m,signature>
+// //
+// // 		//m3 = qB
+// //
+// // 		m4 = <$B,$A,pubB,~nB,qB>
+// // 	in
+// // 	[
+// // 		!Enclave($B,$p2,md,report_key),
+// // 		// !Program($prog,$eidB,$pidB),  //TODO Create uid of this?
+// // 		In(qB),
+// // 		// State_E2(<~ltkB,~nB,pubA,~nA,KDK,SMK,VK,hB>)
+// // 		// Boris_1( ~boris, ~ltkB,~nB,hB, pubA,~nA, KDK,SMK,VK )
+// // 		AgSt($B, <~ltkB,~nB>)
+// // 	]--[
+// // 		Boris_I2($B,qB),
+// // 		Boris_O2($B,m4)
+// // 	]->[
+// // 		// State_E2(<~ltkB,~nB,pubA,~nA,KDK,SMK,VK,hB,qB>),
+// // 		// Boris_2( ~boris, ~ltkB,~nB,hB,qB, pubA,~nA, KDK,SMK,VK ),
+// // 		AgSt($B, <~ltkB,~nB,qB>),
+// // 		Out(m4)
+// // 	]
+//
+// // rule Boris_3:
+// // 	let
+// // 		m11 = <rA,rB>
+// // 		//uid = <$prog,$eidB,$pidB>
+// // 	in
+// // 	[
+// // 		!Enclave($B,$p2,md,report_key),
+// // 		// !Program($prog,$eidB,$pidB),
+// // 		In(m11),
+// // 		// State_E2(<~ltkB,~nB,pubA,~nA,KDK,SMK,VK,hB,qB>)
+// // 		// Boris_2( ~boris, ~ltkB,~nB,hB,qB, pubA,~nA, KDK,SMK,VK )
+// // 		// AgSt(uid, <~ltkB,~nB>)
+// // 		AgSt($B, <~ltkB,~nB,qB>)
+// // 	]--[
+// // 		Boris_I3($B,m11)
+// // 		//TODO At this point validate reports and derive MK/SK
+// // 	]->[
+// // 		// State_E2(<~ltkB,~nB,pubA,~nA,KDK,SMK,VK,hB,qB,rA,rB>)
+// // 		//TODO Termina aqui?
+// // 	]
+//
+//
+//
+// //[color=DAAADA]
+// rule Carol_1:
+// 	let
+// 		report_key = sgx_get_key(<$MRENCLAVE, 'report', ~nonce>)
+//
+// 		data = <'hC'>
+// 		//body = <$A, $p, md, data>
+// 		body = <$C, $p, $MRENCLAVE, data>
+// 		report = <body, CMAC(body, report_key)>
+//
+// 		so = <'hC'>
+// 	in
+// 	[
+// 		!Enclave($C, $p, $MRENCLAVE, $MRSIGNER, ~nonce)
+// 	]--[
+// 		Progress_C1(report),
+// 		// Carol_O1($A, report),
+// 		Secret(report_key)
+// 	]->[
+// 		AgSt('enclave3', $C, '1', so),
+// 		Out(report)
+// 	]
+//
+// //[color=DAAADA]
+// rule Carol_2:
+// 	// let
+// 	// 	//FIXME get body her to extract hB and compare with hA in Eq
+// 	// 	d = <hB> //2
+// 	// 	b = <$B,$p2,md,d> //2
+// 	// 	//1 qB = <<<b,cert>,sig>,t>
+// 	// 	qB = <<b,cert>,t> //2
+// 	// 	//m4 = <pubB,~nB,quoteB>
+// 	// 	//m4 = <pubB,~nB,qB>
+// 	// 	m4 = <$B,$A,pubB,~nB,qB>
+// 	// 	// uid = <$prog,$eidA,$pidA>
+// 	//
+// 	//
+// 	// 	// shared_secret = pubB^~ltkA
+// 	// 	// KDK = CMAC(shared_secret,'0x00')
+// 	// 	// SMK = CMAC(<'0x01','SMK','0x00','0x80','0x00'>,KDK)
+// 	// 	// VK = CMAC(<'0x01','VK','0x00','0x80','0x00'>,SMK)
+// 	// 	// hA = SHA(<'g'^~ltkA,pubB,VK>)
+// 	// 	// h is sent as user data within the report
+// 	// 	hA = SHA(<'g'^~ltkA,pubB>) //TEMP
+// 	//
+// 	// 	// prepare report for QE
+// 	// 	///request = <$A,$p1,md,'report'>
+// 	// 	///report_key = sgx_get_key(request)
+// 	// 	data = <hA>                            // sgx_report_data_t
+// 	// 	body = <$A,$p1,md,data>       // sgx_report_body_t
+// 	// 	report = <body,CMAC(body,report_key)> // sgx_report_t
+// 	// in
+// 	let
+// 		si = <'hC'>
+// 		so = <'hC', ~session_key>
+//
+// 		// cert = <$pid, pk(~ak), $IAS, sign(<$pid, pk(~ak), $IAS>, ~isk)> // parte de baixo
+// 		//TODO Não é necessário, apenas para ver se pattern funciona... problema do sig_QE no IAS
+// 		//523 quote = <content, sign(content, ~ak), cert>
+//
+// 		//TEMP: desnecessário:
+// 		quote = <content, sign(content, ~ak), cert>
+// 	in
+// 	[
+// 		AgSt('enclave3', $C, '1', si),
+// 		!Enclave($C, $p, $MRENCLAVE, $MRSIGNER, ~nonce),
+// 		!Pk($RAS, pub),
+// 		Fr(~session_key),
+// 		In(quote)
+// 	]--[
+// 		Progress_C2(quote),
+// 		// Carol_I2($A, quote),
+// 		// Carol_O2($A, quote),
+// 		Eq(quote,quote)
+// 	]->[
+// 		AgSt('enclave3', $C, '2', so),
+// 		//Out(quote)
+// 		//Out(<quote, '1111'>)
+// 		Out(aenc(~session_key, pub)),
+// 		Out(senc(quote, ~session_key))
+// 	]
+//
+// //[color=DAAADA]
+// rule Carol_3:
+// 	let
+// 		si = <'hC', ~session_key>
+// 		// // uid = <$prog,$eidA,$pidA>
+// 		// m7 = <qA,qB>
+//
+// 		//certified_report = <avr_data, sign(avr_data, rsk)>
+// 		certified_report = <avr_data, signature>
+// 	in
+// 	[
+// 		AgSt('enclave3', $C, '2', si),
+// 		!Enclave($C, $p, $MRENCLAVE, $MRSIGNER, ~nonce),
+// 		!IAS_pub($IAS, pk(~rsk)), // assume IAS public key hardcoded
+// 		//524 In(certified_report)
+// 		In(senc(certified_report, ~session_key))
+// 		//1 In(senc(<certified_report>, ~client_session_key))
+// 	]--[
+// 		Progress_C3(certified_report),
+// 		// Carol_I3($A, certified_report),
+// 		Eq(true, verify(signature, avr_data, pk(~rsk)))
+// 		//,Alice_O3($A,m7)
+// 	]->[
+// 		// State_E2(<~ltkA,~nA,pubB,~nB,KDK,SMK,VK,hA,quoteA,quoteB>),
+// 		// Alice_3( ~alice, ~ltkA,~nA,hA,quoteA, pubB,~nB,quoteB, KDK,SMK,VK ),
+// 		//AgSt($A, <~ltkA,~nA,quoteA,quoteB>),
+// 		//Out(m7) // commented? FIXME these two lines?
+// 	]
+
+
+
+// rule Carol_1:
+// 	let
+// 		report_key = sgx_get_key(<$MRENCLAVE, 'report', ~nonce>)
+//
+// 		data = <'hC'>
+// 		//body = <$A, $p, md, data>
+// 		body = <$C, $r, $MRENCLAVE, data>
+// 		report = <body, CMAC(body, report_key)>
+//
+// 		so = <'hC'>
+// 	in
+// 	[
+// 		!Enclave($C, $r, $MRENCLAVE, $MRSIGNER, ~nonce)
+// 	]--[
+// 		Carol_O1($C, report),
+// 		Secret(report_key)
+// 	]->[
+// 		AgSt('enclave2', $C, '1', so),
+// 		Out(report)
+// 	]
+//
+// rule Carol_2:
+// 	// let
+// 	// 	//FIXME get body her to extract hB and compare with hA in Eq
+// 	// 	d = <hB> //2
+// 	// 	b = <$B,$p2,md,d> //2
+// 	// 	//1 qB = <<<b,cert>,sig>,t>
+// 	// 	qB = <<b,cert>,t> //2
+// 	// 	//m4 = <pubB,~nB,quoteB>
+// 	// 	//m4 = <pubB,~nB,qB>
+// 	// 	m4 = <$B,$A,pubB,~nB,qB>
+// 	// 	// uid = <$prog,$eidA,$pidA>
+// 	//
+// 	//
+// 	// 	// shared_secret = pubB^~ltkA
+// 	// 	// KDK = CMAC(shared_secret,'0x00')
+// 	// 	// SMK = CMAC(<'0x01','SMK','0x00','0x80','0x00'>,KDK)
+// 	// 	// VK = CMAC(<'0x01','VK','0x00','0x80','0x00'>,SMK)
+// 	// 	// hA = SHA(<'g'^~ltkA,pubB,VK>)
+// 	// 	// h is sent as user data within the report
+// 	// 	hA = SHA(<'g'^~ltkA,pubB>) //TEMP
+// 	//
+// 	// 	// prepare report for QE
+// 	// 	///request = <$A,$p1,md,'report'>
+// 	// 	///report_key = sgx_get_key(request)
+// 	// 	data = <hA>                            // sgx_report_data_t
+// 	// 	body = <$A,$p1,md,data>       // sgx_report_body_t
+// 	// 	report = <body,CMAC(body,report_key)> // sgx_report_t
+// 	// in
+// 	let
+// 		si = <'hC'>
+// 		so = <'hC'>
+// 	in
+// 	[
+// 		AgSt('enclave2', $C, '1', si),
+// 		!Enclave($C, $r, $MRENCLAVE, $MRSIGNER, ~nonce),
+// 		In(quote)
+// 	]--[
+// 		Carol_I2($C, quote),
+// 		Carol_O2($C, quote),
+// 		Eq(quote,quote)
+// 	]->[
+// 		AgSt('enclave2', $C, '2', so),
+// 		Out(quote)
+// 	]
+//
+// rule Carol_3:
+// 	let
+// 		si = <'hC'>
+// 		// // uid = <$prog,$eidA,$pidA>
+// 		// m7 = <qA,qB>
+// 		certified_report = <avr_data, signature>
+// 	in
+// 	[
+// 		AgSt('enclave2', $C, '2', si),
+// 		!Enclave($C, $r, $MRENCLAVE, $MRSIGNER, ~nonce),
+// 		!IAS_pub($IAS, pk(~rsk)),
+// 		In(certified_report)
+// 	]--[
+// 		Carol_I3($C, certified_report),
+// 		Eq(true, verify(signature, avr_data, pk(~rsk)))
+// 		//,Carol_O3($A,m7)
+// 	]->[
+// 		// State_E2(<~ltkA,~nA,pubB,~nB,KDK,SMK,VK,hA,quoteA,quoteB>),
+// 		// Carol_3( ~alice, ~ltkA,~nA,hA,quoteA, pubB,~nB,quoteB, KDK,SMK,VK ),
+// 		//AgSt($A, <~ltkA,~nA,quoteA,quoteB>),
+// 		//Out(m7) // commented? FIXME these two lines?
+// 	]
+//
+// rule Dalia_1:
+// 	let
+// 		report_key = sgx_get_key(<$MRENCLAVE, 'report', ~nonce>)
+//
+// 		data = <'hD'>
+// 		body = <$D, $p, $MRENCLAVE, data>
+// 		report = <body, CMAC(body, report_key)>
+//
+// 		so = <'hD'>
+// 	in
+// 	[
+// 		!Enclave($D, $p, $MRENCLAVE, $MRSIGNER, ~nonce)
+// 	]--[
+// 		Dalia_O1($D, report),
+// 		Secret(report_key)
+// 	]->[
+// 		AgSt('enclave3', $D, '1', so),
+// 		Out(report)
+// 	]
+//
+// rule Dalia_2:
+// 	let
+// 		si = <'hD'>
+// 		so = <'hD'>
+// 	in
+// 	[
+// 		AgSt('enclave3', $D, '1', si),
+// 		!Enclave($D, $p, $MRENCLAVE, $MRSIGNER, ~nonce),
+// 		In(quote)
+// 	]--[
+// 		Dalia_I2($D, quote),
+// 		Dalia_O2($D, quote),
+// 		Eq(quote,quote)
+// 	]->[
+// 		AgSt('enclave3', $D, '2', so),
+// 		Out(quote)
+// 	]
+//
+// rule Dalia_3:
+// 	let
+// 		si = <'hD'>
+//
+// 		certified_report = <avr_data, signature>
+// 	in
+// 	[
+// 		AgSt('enclave3', $D, '2', si),
+// 		!Enclave($D, $p, $MRENCLAVE, $MRSIGNER, ~nonce),
+// 		!IAS_pub($IAS, pk(~rsk)),
+// 		In(certified_report)
+// 	]--[
+// 		Dalia_I3($D, certified_report),
+// 		Eq(true, verify(signature, avr_data, pk(~rsk)))
+// 	]->[
+// 	]
+
+
+
+//REVIEW
+/**
+** The Quoting Enclave receives a report from an enclave, and
+** produces a certified (signed by AK) quote for that enclave.
+** The quote normally contains enclave measurement, etc, but in
+** this case we only sign over the enclave identity (can be expanded).
+**
+** Receives local attestation from E (via A), and produces a quote.
+**/
+rule QE_new [color=AADADA]:
+	let
+		report_key = sgx_get_key(<~MRENCLAVE, 'report', real(~id_CPU)>)
+
+		// cert = <$pid, pk(~ak), $IAS, sign(<$pid, pk(~ak), $IAS>, ~isk)>
+		// //NOTE Não é necessário estar aqui, mas ver se assim termina
+		// //TODO remove
+
+		// data = <'hA'>
+		// Remover para suportar múltiplos enclaves TODO
+		// body = <$eid, $pid, $MRENCLAVE, data>
+		// report = <body, CMAC(body, report_key)>
+		data = <~hF>
+		body = <$F, ~id_CPU, ~MRENCLAVE, data>
+		report = <body, CMAC(body, report_key)>
+
+		content = <body>
+		quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
+		// FIXME Não é preciso aqui chave pública do QE para que Intel consiga verificar a assinatura do QE sobre o 'content'? FIXED: adicionei pub QE
+	in
+	[
+		// !QE($pid, ~ak, cert, ~nonce),
+		State_QE(~tid_QE, 'idle', <~id_QE, ~tid_CPU, ~id_CPU, ~id_IAS, ~priv_QE, sign(pk(~priv_QE), ~priv_IAS), pk(~priv_IAS)>),
+		// !IAS_pub($IAS, pk(~isk)), //TODO remove //NOTE Isto causava problemas e tinha estado falsificado, mas ao comentar já funciona... provavelmente isto iniciava também setup antigo e criava conflitos!
+		In(report)
+	]--[
+		Progress_QE_new_1(~tid_QE, ~tid_CPU, report, quote)
+	]->[
+		State_QE(~tid_QE, 'idle', <~id_QE, ~tid_CPU, ~id_CPU, ~id_IAS, ~priv_QE, sign(pk(~priv_QE), ~priv_IAS), pk(~priv_IAS)>),
+		Out(quote)
+	]
+
+// Receive M13, Send M14
+rule CAS_2_new:
+	let
+		// so = <~tid, ~client_session_key, ~server_session_key, ~ssk2>
+		// //pub = pk(~ltk_IAS)
+		//
+		// // cert = <$pid, pk(~ak), $IAS, sign(<$pid, pk(~ak), $IAS>, ~isk)> // parte de baixo
+		// //TODO Não é necessário, apenas para ver se pattern funciona... problema do sig_QE no IAS
+		// //523 quote = <content, sign(content, ~ak), cert>
+		so = <~tid_RA>
+		aep = <quote, ~subscription_key>
+	in
+	[
+		// !CAS($RAS, ~subscription_key, ~ltk),
+		State_CAS(~tid_CAS, 'idle', <~id_CAS, ~tid_IAS, ~subscription_key>),
+		Fr(~tid_RA),
+		In(quote)
+
+		// Fr(~tid),
+		// !Pk($IAS, pub),                // retrieve server public key
+		// //In(quote),
+		// //In(aenc(quote, pk(~ltk))),
+		// In(aenc(~client_session_key, pk(~ltk))),
+		// In(senc(quote, ~client_session_key)),
+		// //In(<quote, '1111'>),
+		// Fr(~ssk2),
+		// Fr(~server_session_key)        // TLS session key
+	]--[
+		Progress_CAS_2(~tid_CAS, ~tid_IAS, ~tid_RA, aep),
+		OUT_CAS_1(senc(aep, ~subscription_key))
+	]->[
+		State_CAS(~tid_CAS, 'forwarding', <~id_CAS, ~tid_IAS, ~subscription_key>),
+		AgSt('CAS', $CAS, 'forwarding', so),
+		// AgSt('RAS', $RAS, 'forwarding', so),
+		// Out(aenc(<~server_session_key,~ssk2>, pub)),
+		// //Out(aenc(~ssk2, pub)),
+		// Out(senc(<quote, ~subscription_key>, ~server_session_key))
+
+		// Out(aep) // NOTE using encrypted
+		// FIXME replay attack, nonce?
+		// Out(<~tid_RA, senc(aep, transport_key($CAS, $IAS, ~tid_RA))>)
+		// adversário pode substituir tid mas não obter chave: only DoS
+		Out(senc(aep, ~subscription_key))
+	]
+	//TODO forwarding or attesting ?
+
+rule CAS_3_new:
+	let
+		// si = <~tid, ~client_session_key, ~server_session_key, ~ssk2>
+		si = <~tid_RA>
+	in
+	[
+		State_CAS(~tid_CAS, 'forwarding', <~id_CAS, ~tid_IAS, ~subscription_key>),
+		AgSt('CAS', $CAS, 'forwarding', si),
+		// In(senc(avr, ~ssk2))
+		// In(avr)
+		// In(senc(avr, transport_key($IAS, $CAS, ~tid_RA)))
+		In(senc(avr, ~subscription_key))
+	]--[
+		Progress_CAS_3(~tid_CAS, ~tid_IAS, ~tid_RA, avr)
+	]->[
+		State_CAS(~tid_CAS, 'idle', <~id_CAS, ~tid_IAS, ~subscription_key>),
+		// Out(senc(avr, ~client_session_key))
+		Out(avr)
+	]
+
+// REVIEW
+/**
+** The IAS receives a signed quote from an enclave (via RAS), and
+** produces a signed report containing the verification result.
+**
+** The IPK is private, but the RPK is public.
+**/
+rule IAS_new [color=DADADA]:
+	let
+		body = <$F, ~id_CPU, ~MRENCLAVE, data>
+		content = <body>
+		// //cert_QE = <pid, pk(~ak), $IAS, signature>
+		// //5 cert_QE = <$pid, pk(~ak), $IAS, sign(<$pid, pk(~ak), $IAS>, ~isk)>
+		// cert_QE = <$pid, pk(~ak), $IAS, signature>
+		//
+		// status = verify(signature, <$pid, pk(~ak), $IAS>, pk(~isk))
+		// //TODO com macros aqui como sig ou I sem dollar funciona?
+		//
+		// status = verify(sign(pk(~priv_QE), ~priv_IAS), pk(~priv_QE), pk(~priv_IAS))
+		// FIXME para isto funcionar preciso chave pública do QE que não tenho!
+		quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
+		//
+		// TODO open up quote, and valide content (is enclave licensed? CPU?)
+
+		// //cert_QE = <pid, pk(~ak), $IAS, signature>
+		// //5 cert_QE = <$pid, pk(~ak), $IAS, sign(<$pid, pk(~ak), $IAS>, ~isk)>
+		// cert_QE = <$pid, pk(~ak), $IAS, signature>
+		//
+		// status = verify(signature, <$pid, pk(~ak), $IAS>, pk(~isk))
+		// //TODO com macros aqui como sig ou I sem dollar funciona?
+		//
+		// // Attestation Evidence Payload: *** only using `quote` ***
+		// //1 quote = <content, sign(content, ~ak), certificate>
+		// quote = <content, sig_QE, cert_QE>  // quote body || quote signature
+		// //6 quote = <content, sign(content, ~ak), cert_QE>  // quote body || quote signature
+		aep = <quote, ~subscription_key>     // quote||manifest||nonce
+		//3 aep = <content, sign(content, ~ak), cert_QE>
+
+		// Attestation Verification Report
+		//quote_status = verify(qs,qb,ipk)
+		// quote_status, quote_body, etc in IAS spec... use correct names ??? TODO
+		// avr_data = <status, content>  // many fields, see IAS spec // 11
+		avr_data = <'OK', content>  // many fields, see IAS spec
+		avr = <avr_data, sign(avr_data, ~priv_IAS)>
+
+		//aep = <content, sign(content, ~ak)>
+		//aep = <content, sign(content, ~ak), certificate>
+		//avr = <content, sign(content, rsk)>
+	in
+	[
+		// !IAS($IAS, ~isk, ~rsk, ~ltk, ~subscription_key),
+		// In(aenc(<~server_session_key,~ssk2>, pk(~ltk))),
+		// In(senc(aep, ~server_session_key))
+		!Keys_IAS(~id_IAS, ~priv_IAS),
+		State_IAS(~tid_IAS, 'idle', <~id_IAS, ~tid_CAS, ~subscription_key>),
+		// In(aep)
+		// In(<~tid_RA, senc(aep, transport_key($CAS, $IAS, ~tid_RA))>)
+		In(senc(aep, ~subscription_key))
+	]--[
+		Progress_IAS_new(~tid_IAS, ~tid_CAS, aep, avr),
+
+		IN_IAS(quote, senc(aep, ~subscription_key)),
+
+		// verify IAS signature over public key of QE
+		Eq(true, verify(sign(pk(~priv_QE), ~priv_IAS), pk(~priv_QE), pk(~priv_IAS))),
+
+		// verify QE signature over contents of quote
+		Eq(true, verify(sign(content, ~priv_QE), content, pk(~priv_QE)))
+	]->[
+		State_IAS(~tid_IAS, 'idle', <~id_IAS, ~tid_CAS, ~subscription_key>),
+		// Out(avr)
+		// Out(senc(avr, transport_key($IAS, $CAS, ~tid_RA)))
+		Out(senc(avr, ~subscription_key))
+
+		// Out(senc(avr, ~server_session_key))
+		// Out(<$IAS,$RAS,senc(avr, ~server_session_key)>)
+		// Out(senc(avr, ~ssk2))
+	]
+
+
+
+
+
+
+// /**
+// ** The Quoting Enclave receives a report from an enclave, and
+// ** produces a certified (signed by AK) quote for that enclave.
+// ** The quote normally contains enclave measurement, etc, but in
+// ** this case we only sign over the enclave identity (can be expanded).
+// **
+// ** Receives local attestation from E (via A), and produces a quote.
+// **/
+// rule QE [color=AADADA]:
+// 	let
+// 		report_key = sgx_get_key(<$MRENCLAVE, 'report', ~nonce>)
+// 		//TODO Consider adding pid for supporting multiple QE
+//
+// 		cert = <$pid, pk(~ak), $IAS, sign(<$pid, pk(~ak), $IAS>, ~isk)>
+// 		//NOTE Não é necessário estar aqui, mas ver se assim termina
+// 		//TODO remove
+//
+// 		// data = <'hA'>
+// 		// Remover para suportar múltiplos enclaves
+// 		body = <$eid, $pid, $MRENCLAVE, data>
+// 		report = <body, CMAC(body, report_key)>
+//
+// 		content = <body>
+// 		quote = <content, sign(content, ~ak), cert>
+// 	in
+// 	[
+// 		!QE($pid, ~ak, cert, ~nonce),
+// 		!IAS_pub($IAS, pk(~isk)), //TODO remove
+// 		In(report)
+// 	]--[
+// 		Progress_QE(report,quote),
+//
+// 		Receive_QE($pid, report), //FIXME
+// 		Send_QE($pid, quote),     //FIXME
+// 		Secret(report_key)        //FIXME
+// 	]->[
+// 		Out(quote)
+// 	]
+//
+// /**
+// ** The IAS receives a signed quote from an enclave (via RAS), and
+// ** produces a signed report containing the verification result.
+// **
+// ** The IPK is private, but the RPK is public.
+// **/
+// rule IAS [color=DADADA]:
+// 	let
+// 		//2 certificate = <$pid, pk(~ak), $I, sign(<$pid, pk(~ak), $I>, isk)>
+// 		//3 certificate = <pid, pub, $I, sign(<pid, pub, $I>, isk)>
+// 		// pid = subject (QE), pub = public key of QE, issuer, sig of issuer over rest of certificate
+// 		//4 cert_QE = <pid, pub, $I, signature>
+// 		//4
+// 		//4 status = verify(signature, <pid, pub, $I>, pk(~isk))
+//
+// 		//cert_QE = <pid, pk(~ak), $IAS, signature>
+// 		//5 cert_QE = <$pid, pk(~ak), $IAS, sign(<$pid, pk(~ak), $IAS>, ~isk)>
+// 		cert_QE = <$pid, pk(~ak), $IAS, signature>
+//
+// 		status = verify(signature, <$pid, pk(~ak), $IAS>, pk(~isk))
+// 		//TODO com macros aqui como sig ou I sem dollar funciona?
+//
+// 		// Attestation Evidence Payload: *** only using `quote` ***
+// 		//1 quote = <content, sign(content, ~ak), certificate>
+// 		quote = <content, sig_QE, cert_QE>  // quote body || quote signature
+// 		//6 quote = <content, sign(content, ~ak), cert_QE>  // quote body || quote signature
+// 		aep = <quote, ~subscription_key>     // quote||manifest||nonce
+// 		//3 aep = <content, sign(content, ~ak), cert_QE>
+//
+// 		// Attestation Verification Report
+// 		//quote_status = verify(qs,qb,ipk)
+// 		// quote_status, quote_body, etc in IAS spec... use correct names ??? TODO
+// 		avr_data = <status, content>  // many fields, see IAS spec
+// 		avr = <avr_data, sign(avr_data, ~rsk)>
+//
+// 		//aep = <content, sign(content, ~ak)>
+// 		//aep = <content, sign(content, ~ak), certificate>
+// 		//avr = <content, sign(content, rsk)>
+// 	in
+// 	[
+// 		!IAS($IAS, ~isk, ~rsk, ~ltk, ~subscription_key),
+// 		//523 !QE($pid, ~ak, cert, ~nonce),
+// 		//In(aep)
+// 		//In(<aep, '12345'>)
+// 		//In(<senc(aep, ~subscription_key), '12345'>)
+// 		//In(<aenc(~session_key, pk(~ltk)), senc(<$RAS, $I, aep, ~subscription_key>, ~session_key)>)
+// 		//In(senc(aep,~subscription_key))
+//
+// 		In(aenc(<~server_session_key,~ssk2>, pk(~ltk))),
+// 		In(senc(aep, ~server_session_key))
+// 	]--[
+// 		Progress_IAS(quote, ~server_session_key, avr, ~ssk2),
+//
+// 		//TODO
+// 		Receive_IAS(<quote, ~subscription_key>),
+// 		IAS_I1b($IAS, quote, ~subscription_key),//TORM
+// 		//524 Send_IAS(avr),
+// 		Send_IAS($IAS, avr),
+//
+// 		// Verify IAS signature over public key of QE
+// 		Eq(true, status),
+//
+// 		// Verify QE signature over quote
+// 		Eq(true, verify(sig_QE, content, pk(~ak))),
+// 		//Eq(true, verify(sig_QE, content, pub)), // ou pub_QE
+//
+// 		//TODO
+// 		Secret(~isk),
+// 		Secret(~rsk)
+// 	]->[
+// 		//Out(avr)
+//
+// 		// Out(senc(avr, ~server_session_key))
+// 		// Out(<$IAS,$RAS,senc(avr, ~server_session_key)>)
+// 		Out(senc(avr, ~ssk2))
+// 	]
+//
+// //TODO payload coming from RAS needs to be changed from quote to aep
+//
+// // rule RAS_1:
+// // 	let
+// // 		m7 = <quoteA,quoteB>
+// // 	in
+// // 	[
+// // 		In(m7)
+// // 	]--[
+// // 		RAS_I1(m7),
+// // 		RAS_O1(<quoteA>,<quoteB>)
+// // 	]->[
+// // 		Out(<quoteA>),  // m8a
+// // 		Out(<quoteB>)   // m8b
+// // 	]
+// //
+// //
+// // rule RAS_2:
+// // 	let
+// // 		m10 = <reportA,reportB>
+// // 	in
+// // 	[
+// // 		In(reportA),  // m9a
+// // 		In(reportB)   // m9b
+// // 	]--[
+// // 		RAS_I2(reportA,reportB),
+// // 		RAS_O2(m10)
+// // 	]->[
+// // 		Out(m10)
+// // 	]
+//
+// rule IAS_2 [color=DADADA]:
+// let
+// 	// sig_rl = 'placeholder'
+// 	// response = <'OK', ~request_id, sig_rl>
+// 	response = <'OK', ~request_id, 'sig_rl'>
+// in
+// [
+// 	// !IAS($IAS, ~isk, ~rsk, ~ltk, ~subscription_key),
+// 	// In(aenc(<~tid_CAS, ~session_key_client_to_server, ~session_key_server_to_client>, pk(~ltk))),
+// 	// In(senc(<~tid_CAS, ~subscription_key, gid_enclave>, ~session_key_client_to_server)),
+// 	!IASv2(~id_IAS),
+// 	In(<~tid_CAS, gid_enclave, ~subscription_key>),
+// 	Fr(~request_id)
+// ]--[
+// 	Progress_I2(~tid_CAS, gid_enclave, ~request_id)
+// ]->[
+// 	// Out(senc(<~tid_CAS, response>, ~session_key_server_to_client))
+// ]
+//
+// // Receive M3, Send M4
+// rule CAS_12:
+// 	let
+// 		so = <~tid_enclave, gid_enclave, ~tid_CAS, ~session_key_client_to_server, ~session_key_server_to_client>
+// 	in
+// 	[
+// 		!CAS($RAS, ~subscription_key, ~ltk),
+// 		Fr(~tid_CAS),
+// 		!Pk($IAS, pub),                // retrieve server public key
+// 		// In(aenc(~client_session_key, pk(~ltk))),
+// 		// In(senc(quote, ~client_session_key)),
+//
+// 		In(<~tid_enclave, gid_enclave>),
+// 		//NOTE Não faz mal ser enviado em claro porque não confiamos no CAS. O IAS depois certifica a report e o cliente verifica que o GID enviado e o Thread ID estão correctos. Assim se adversário modificar, cliente rejeita o resultado e aborta a execução.
+//
+// 		Fr(~session_key_client_to_server),
+// 		Fr(~session_key_server_to_client)
+// 	]--[
+// 		Progress_C12(~tid_enclave, gid_enclave, ~tid_CAS)
+// 	]->[
+// 		AgSt('RAS', $RAS, 'fetching_sig_rl', so),
+// 		// Out(aenc(<~tid_CAS, ~session_key_client_to_server, ~session_key_server_to_client>, pub)),
+// 		// Out(senc(<~tid_CAS, ~subscription_key, gid_enclave>, ~session_key_client_to_server))
+// 		Out(<~tid_CAS, gid_enclave, ~subscription_key>)
+// 	]
+//
+// // Receive M5, Send M6
+// rule CAS_13:
+// 	let
+// 		si = <~tid_enclave, gid_enclave, ~tid_CAS, ~session_key_client_to_server, ~session_key_server_to_client>
+// 	in
+// 	[
+// 		AgSt('RAS', $RAS, 'fetching_sig_rl', si),
+// 		// In(senc(sig_rl, ~session_key_server_to_client))
+// 		In(senc(<~tid_CAS, response>, ~session_key_server_to_client))
+// 	]--[
+// 		Progress_C13(~tid_enclave, ~tid_CAS)
+// 	]->[
+// 		Out(<~tid_enclave, gid_enclave, response>)
+// 	]
+//
+// // Receive M13, Send M14
+// rule CAS_2:
+// 	let
+// 		so = <~tid, ~client_session_key, ~server_session_key, ~ssk2>
+// 		//pub = pk(~ltk_IAS)
+//
+// 		// cert = <$pid, pk(~ak), $IAS, sign(<$pid, pk(~ak), $IAS>, ~isk)> // parte de baixo
+// 		//TODO Não é necessário, apenas para ver se pattern funciona... problema do sig_QE no IAS
+// 		//523 quote = <content, sign(content, ~ak), cert>
+// 	in
+// 	[
+// 		!CAS($RAS, ~subscription_key, ~ltk),
+// 		Fr(~tid),
+// 		!Pk($IAS, pub),                // retrieve server public key
+// 		//In(quote),
+// 		//In(aenc(quote, pk(~ltk))),
+// 		In(aenc(~client_session_key, pk(~ltk))),
+// 		In(senc(quote, ~client_session_key)),
+// 		//In(<quote, '1111'>),
+// 		Fr(~ssk2),
+// 		Fr(~server_session_key)        // TLS session key
+// 	]--[
+// 		Progress_R1(quote, ~server_session_key),
+//
+// 		RAS_I1(quote),
+// 		RAS_O1(<quote, ~subscription_key>),
+// 		RAS_O1b($RAS, quote, ~subscription_key),//TORM
+// 		Secret(~subscription_key)
+// 	]->[
+// 		AgSt('RAS', $RAS, 'forwarding', so),
+// 		//0 Out(quote)
+// 		//Out(<quote, '12345'>)
+// 		//Out(<quote, CMAC(quote, ~subscription_key)>)
+// 		// Sends session key encrypted with server public key, and
+// 		// encrypted data (quote and subscription key) from RAS to IAS
+// 		//1 Out(<aenc(~server_session_key, pub), senc(<$RAS, $IAS, quote, ~subscription_key>, ~server_session_key)>)
+// 		//Out(senc(quote, ~subscription_key))
+// 		//Out(<senc(quote, ~subscription_key), '12345'>)
+//
+// 		Out(aenc(<~server_session_key,~ssk2>, pub)),
+// 		//Out(aenc(~ssk2, pub)),
+// 		Out(senc(<quote, ~subscription_key>, ~server_session_key))
+// 	]
+//
+//
+// rule CAS_3:
+// 	let
+// 		si = <~tid, ~client_session_key, ~server_session_key, ~ssk2>
+// 	in
+// 	[
+// 		AgSt('RAS', $RAS, 'forwarding', si),
+// 		//1 Fr(~nonce),
+// 		//524 In(report)
+//
+// 		// In(senc(avr, ~server_session_key))
+// 		// In(<$IAS,$RAS,senc(avr, ~server_session_key)>)
+// 		In(senc(avr, ~ssk2))
+// 	]--[
+// 		Progress_R2(avr, ~ssk2),
+//
+// 		//524 RAS_I2(avr),
+// 		RAS_I2($RAS, avr)
+// 		//, RAS_O2(avr)
+// 	]->[
+// 		//524 Out(report)
+// 		////Out(senc(report, ~client_session_key))
+// 		//1 Out(senc(<report>, ~client_session_key))
+// 		Out(senc(avr, ~client_session_key))
+// 	]
+
+/******************************************************** */
+
+restriction Equality:
+	"All x y #i. Eq(x,y)@i ==> x=y"
+
+// restriction Inequality:
+// 	"All x #i. Neq(x,x) @i ==> F"
+
+restriction OnlyOnce:
+	"All #i #j. OnlyOnce() @#i & OnlyOnce() @#j ==> #i = #j"
+
+// lemma secrecy:
+// 	"All k #i #j. Secret(k) @i & K(k) @j ==> F"
+//
+// lemma temp: exists-trace
+// 	// "Ex m #i #j. RAS_O1(m) @i & Receive_IAS(m) @j & i<j"
+//
+// 	// "Ex RAS IAS m n #i #j. RAS_O1b(RAS,m,n) @i & IAS_I1b(IAS,m,n) @j"
+//
+// 	// "Ex RAS IAS m #i #j. Send_IAS(IAS,m) @i & RAS_I2(RAS,m) @j"
+//
+// 	"Ex A IAS m #i #j. Send_IAS(IAS,m) @i & Alice_I3(A,m) @j"
+//
+// 	// "Ex RAS IAS m n p #i #j #k #l.
+// 	// 		RAS_O1b(RAS,m,n) @i & IAS_I1b(IAS,m,n) @j &
+// 	// 		Send_IAS(IAS,p)@k & RAS_I2(RAS,p)@l &
+// 	// 		i<j & j<k & k<l"
+//
+// // Provar caminho IAS, RAS 2, Alice 3.
+// lemma temp_01: exists-trace
+// 	"Ex A RAS IAS m #i #j #k. Send_IAS(IAS,m) @i & RAS_I2(RAS,m) @j & Alice_I3(A,m) @k"
+//
+// lemma Alice: exists-trace
+// 	"
+// 	Ex seed_Alice tid_Alice gid_Alice seed_Boris tid_Boris gid_Boris tid_1 tid_2 request_id_1 request_id_2 #t1 #t2 #t3 #t4 #t5 #t6 #t7.
+// 	Progress_A1(tid_Alice, seed_Alice) @ t1 &
+// 	Progress_B1(tid_Alice, tid_Boris, gid_Boris, seed_Boris) @ t2 &
+// 	Progress_A2(seed_Alice, tid_Alice, gid_Alice, tid_Boris, gid_Boris) @ t3 &
+// 	Progress_C12(tid_Alice, gid_Alice, tid_1) @ t4 &
+// 	Progress_C12(tid_Alice, gid_Boris, tid_2) @ t5 &
+// 	Progress_I2(tid_1, gid_Alice, request_id_1) @ t6 &
+// 	Progress_I2(tid_2, gid_Boris, request_id_2) @ t7
+// 	"
+//
+// // Provar caminho ...
+// lemma Carol: exists-trace
+// 	"
+// 	Ex report quote ssk1 avr ssk2 #t20 #t21 #t22 #t23 #t24 #t25 #t26.
+// 	Progress_C1(report) @ t20 & Progress_QE(report,quote) @ t21 & Progress_C2(quote) @ t22 & Progress_R1(quote,ssk1) @ t23 & Progress_IAS(quote,ssk1,avr,ssk2) @ t24 & Progress_R2(avr,ssk2) @ t25 & Progress_C3(avr) @ t26 &
+//
+// 	t20 < t21 &
+// 	t21 < t22 &
+// 	t22 < t23 &
+// 	t23 < t24 &
+// 	t24 < t25 &
+// 	t25 < t26
+// 	"
+// 	//"Ex A RAS IAS m #i #j #k. Send_IAS(IAS,m) @i & RAS_I2(RAS,m) @j & Alice_I3(A,m) @k"
+//
+// lemma temp_0: exists-trace
+// 	"Ex Alice m #i #j. Alice_O2(Alice,m)@#i & RAS_I1(m)@#j & #i<#j"
+//
+// // lemma temp_1: exists-trace
+// // 	"Ex Alice m n #i #j #k #l. Alice_O2(Alice,m)@#i & RAS_I1(m)@#j & #i<#j & RAS_O2(n)@#k & Alice_I3(Alice,n)@#l & k<l"
+// //
+// // lemma temp_2: exists-trace
+// // 	"Ex Alice n #k #l. RAS_O2(n)@#k & Alice_I3(Alice,n)@#l & k<l"
+//
+// lemma temp_3: exists-trace
+// 	"Ex A Q m #i #j. Alice_O1(A,m)@#i & Receive_QE(Q,m)@#j & i<j"
+//
+// lemma detalhado: exists-trace
+// 	"Ex A Q m1 m2 m3 #a #b #c #d #e #f.
+// 	Alice_O1(A,m1)@a & Receive_QE(Q,m1)@b &
+// 	Send_QE(Q,m2) @c & Alice_I2(A,m2) @d &
+// 	Alice_O2(A,m3) @e & RAS_I1(m3) @f &
+// 	a<b & b<c & c<d & d<e & e<f"
+//
+// // E1 e E2 são o mesmo enclave mas a executar em processadores diferentes: E1 no CPU_1, e E2 e E3 no CPU_3.
+// lemma setup: exists-trace
+// 	"
+// 	Ex QE_1 QE_3 E1 E2 E3 MRENCLAVE_1 MRSIGNER_1 MRENCLAVE_3 MRSIGNER_3 tid_E1 tid_E2 tid_E3 tid_QE_1 tid_QE_3 tid_CPU_1 tid_CPU_3 IAS CPU_1 CPU_3 CAS tid_CAS tid_IAS #t11 #t12 #t13 #t21 #t22 #t23 #t31 #t32 #t33 #t41 #t42 #t51 #t52 #t61 #t62.
+//
+// 	Create_Enclave(E1, MRENCLAVE_1, MRSIGNER_1) @ #t11 & Licensing(E1, IAS) @ #t12 & Binding(tid_E1, E1, CPU_1) @ #t13 &
+//
+// 	Create_Enclave(E2, MRENCLAVE_1, MRSIGNER_1) @ #t21 & Licensing(E2, IAS) @ #t22 & Binding(tid_E2, E2, CPU_3) @ #t23 &
+//
+// 	Create_Enclave(E3, MRENCLAVE_3, MRSIGNER_3) @ #t31 & Licensing(E3, IAS) @ #t32 & Binding(tid_E3, E3, CPU_3) @ #t33 &
+//
+// 	Create_QE(QE_1) @ #t41 & Provision(IAS, QE_1, CPU_1, tid_QE_1, tid_CPU_1) @ #t42 &
+//
+// 	Create_QE(QE_3) @ #t51 & Provision(IAS, QE_3, CPU_3, tid_QE_3, tid_CPU_3) @ #t52 &
+//
+// 	Create_CAS(CAS) @ #t61 & Register_CAS(IAS, CAS, tid_IAS, tid_CAS) @ #t62 &
+//
+// 	t31 < t32 & t32 < t33
+// 	"
+
+// Provar caminho ...
+lemma Frank: exists-trace
+	"
+	// Ex tid_Enclave tid_QE report quote tid_CAS tid_IAS tid_RA aep avr #t1 #t2 #t3 #t4 #t5 #t6 #t7.
+	Ex
+		id_IAS id_CAS id_QE id_CPU id_Enclave MRENCLAVE MRSIGNER
+		tid_CPU tid_QE
+		tid_Enclave report quote tid_CAS tid_IAS tid_RA aep avr
+		F hF
+	#s1 #s2 #s3 #s4 #s5 #s6 #s7 #s8 #s9
+	#t1 #t2 #t3 #t4 #t5 #t6 #t7.
+
+	Create_IAS(id_IAS) @ s1 &
+	Create_CAS(id_CAS) @ s2 &
+	Create_QE(id_QE) @ s3 &
+	Create_CPU(id_CPU) @ s4 &
+	Create_Enclave(id_Enclave, MRENCLAVE, MRSIGNER) @ s5 &
+
+	Provision(id_QE, id_CPU, id_IAS, tid_QE, tid_CPU) @ s6 &
+	Licensing(id_Enclave, id_IAS) @ s7 &
+	Binding(tid_Enclave, id_Enclave, id_CPU) @ s8 &
+	Register_CAS(id_IAS, id_CAS, tid_IAS, tid_CAS) @ s9 &
+
+	Progress_F1(tid_Enclave, F, hF, report) @ t1 &
+	Progress_QE_new_1(tid_QE, tid_CPU, report, quote) @ t2 &
+	Progress_F2(tid_Enclave, F, hF, quote) @ t3 &
+	Progress_CAS_2(tid_CAS, tid_IAS, tid_RA, aep) @ t4 &
+	Progress_IAS_new(tid_IAS, tid_CAS, aep, avr) @ t5 &
+	Progress_CAS_3(tid_CAS, tid_IAS, tid_RA, avr) @ t6 &
+	Progress_F3(tid_Enclave, F, hF, avr) @ t7
+	"
+
+// /**
+// ** Prove that our protocol can be executed.
+// **
+// ** Aggregates all previous functional lemmas in a single execution.
+// **/
+// lemma functional: exists-trace
+// 	"
+// 	(Ex A Q m #i #j. Alice_O1(A,m) @i & Receive_QE(Q,m) @j)
+// 	&(Ex QE A m #i #j. Send_QE(QE,m) @i & Alice_I2(A,m) @j)
+// 	&(Ex A m #i #j. Alice_O2(A, m) @i & RAS_I1(m) @j)
+// 	&(Ex m #i #j. RAS_O1(m) @i & Receive_IAS(m) @j)
+// 	//523 &(Ex m #i #j. Send_IAS(m) @i & RAS_I2(m) @j)
+// 	//523 &(Ex A m #i #j. RAS_O2(m) @i & Alice_I3(A,m) @j)
+//
+// 	// (Ex A QE m1 m2 m3 m5 #i1 #j1 #i2 #j2 #i3 #j3 #i4 #j4 #i5 #j5 #i6 #j6.
+// 	// 	Alice_O1(A,m1) @i1 & Receive_QE(QE,m1) @j1 &
+// 	// 	Send_QE(QE,m2) @i2 & Alice_I2(A,m2) @j2 &
+// 	// 	Alice_O2(A, m3) @i3 & RAS_I1(m3) @j3 &
+// 	// 	RAS_O1(m3) @i4 & Receive_IAS(m3) @j4 &
+// 	// 	Send_IAS(m5) @i5 & RAS_I2(m5) @j5 &
+// 	// 	RAS_O2(m5) @i6 & Alice_I3(A,m5) @j6
+// 	// 	& i1 < j1 & j1 < i2
+// 	// 	& i2 < j2 & j2 < i3
+// 	// 	& i3 < j3 & j3 < i4
+// 	// 	& i4 < j4 & j4 < i5
+// 	// 	& i5 < j5 & j5 < i6
+// 	// 	& i6 < j6
+// 	// 	& i1 < i3 & i3 < j6)
+//
+// 	// &(Ex C Q m #i #j. Carol_O1(C,m) @i & Receive_QE(Q,m) @j)
+// 	// &(Ex QE C m #i #j. Send_QE(QE,m) @i & Carol_I2(C,m) @j)
+// 	// &(Ex C m #i #j. Carol_O2(C, m) @i & RAS_I1(m) @j)
+// 	// &(Ex m #i #j. RAS_O1(m) @i & Receive_IAS(m) @j)
+// 	// &(Ex m #i #j. Send_IAS(m) @i & RAS_I2(m) @j)
+// 	// &(Ex C m #i #j. RAS_O2(m) @i & Carol_I3(C,m) @j)
+// 	//
+// 	// &(Ex D Q m #i #j. Dalia_O1(D,m) @i & Receive_QE(Q,m) @j)
+// 	// &(Ex QE D m #i #j. Send_QE(QE,m) @i & Dalia_I2(D,m) @j)
+// 	// &(Ex D m #i #j. Dalia_O2(D, m) @i & RAS_I1(m) @j)
+// 	// &(Ex m #i #j. RAS_O1(m) @i & Receive_IAS(m) @j)
+// 	// &(Ex m #i #j. Send_IAS(m) @i & RAS_I2(m) @j)
+// 	// &(Ex D m #i #j. RAS_O2(m) @i & Dalia_I3(D,m) @j)
+//
+//
+// 	// (Ex A B m #i #j. Alice_O1(A,m) @i & Boris_I1(B,m) @j)
+// 	// &(Ex B QE m #i #j. Boris_O1(B,m) @i & Receive_QE(QE,m) @j)
+// 	// &(Ex QE B m #i #j. Send_QE(QE,m) @i & Boris_I2(B,m) @j)
+// 	// &(Ex B A m #i #j. Boris_O2(B,m) @i & Alice_I2(A,m) @j)
+// 	// &(Ex A QE m #i #j. Alice_O2(A,m) @i & Receive_QE(QE,m) @j)
+// 	// &(Ex QE A m #i #j. Send_QE(QE,m) @i & Alice_I3(A,m) @j)
+// 	// &(Ex A m #i #j. Alice_O3(A,m) @i & RAS_I1(m) @j)
+// 	// &(Ex m n #i #j #k. RAS_O1(m,n) @i & Receive_IAS(m) @j & Receive_IAS(n) @k)
+// 	// &(Ex m n #i #j #k. Send_IAS(m) @i & Send_IAS(n) @j & RAS_I2(m,n) @k)
+// 	// &(Ex A m #i #j. RAS_O2(m) @i & Alice_I4(A,m) @j)
+// 	// &(Ex A B m #i #j. Alice_O4(A,m) @i & Boris_I3(B,m) @j)
+// 	"
+
+end
