@@ -286,7 +286,7 @@ rule B2:
 	]--[
 		Progress_B2(~tid_Boris, $B, ~id_Boris, ~id_CPU_2, m7, m8)
 	]->[
-		State_Enclave(~tid_Boris, 'TODO', <~id_Boris, ~id_CPU_2, ~BNonce, ~ANonce>),
+		State_Enclave(~tid_Boris, 'LA', <~id_Boris, ~id_CPU_2, ~BNonce, ~ANonce>),
 		Out(m8)
 	]
 
@@ -305,7 +305,7 @@ rule B3:
 	[
 		!Measurements(~id_Boris, ~MRENCLAVE_2, ~MRSIGNER_2),
 		!License(~id_Boris, license),
-		State_Enclave(~tid_Boris, 'TODO', <~id_Boris, ~id_CPU_2, ~BNonce, ~ANonce>),
+		State_Enclave(~tid_Boris, 'LA', <~id_Boris, ~id_CPU_2, ~BNonce, ~ANonce>),
 		!DH_public($A, APublic),
 		!DH_public($B, BPublic),
 		In(m9)
