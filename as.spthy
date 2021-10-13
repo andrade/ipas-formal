@@ -318,7 +318,7 @@ rule B3:
 
 rule A4:
 	let
-		m10 = <quote, ~BNonce, BPublic>
+		m10 = <BQuote, ~BNonce, BPublic>
 
 		report_key = sgx_get_key(<~MRENCLAVE_1, 'report', real(~id_CPU_1)>)
 
@@ -337,8 +337,32 @@ rule A4:
 	]--[
 		Progress_A4(~tid_Alice, $A, ~id_Alice, ~id_CPU_1, m10, m11)
 	]->[
-		State_Enclave(~tid_Alice, 'LA', <~id_Alice, ~id_CPU_1, ~ANonce>),
+		State_Enclave(~tid_Alice, 'LA', <~id_Alice, ~id_CPU_1, ~ANonce, ~BNonce, BQuote>),
 		Out(m11)
+	]
+
+rule A5:
+	let
+		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
+		body = <$A, ~id_CPU_1, ~MRENCLAVE_1, data>
+		content = <body>
+		quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
+		m12 = AQuote
+
+		m13 = <AQuote, BQuote>
+	in
+	[
+		!Measurements(~id_Alice, ~MRENCLAVE_1, ~MRSIGNER_1),
+		!License(~id_Alice, license),
+		State_Enclave(~tid_Alice, 'LA', <~id_Alice, ~id_CPU_1, ~ANonce, ~BNonce, BQuote>),
+		!DH_public($A, APublic),
+		!DH_public($B, BPublic),
+		In(m12)
+	]--[
+		Progress_A5(~tid_Alice, $A, ~id_Alice, ~id_CPU_1, m12, m13)
+	]->[
+		State_Enclave(~tid_Alice, 'RA', <~id_Alice, ~id_CPU_1, ~ANonce, ~BNonce, BQuote>),
+		Out(m13)
 	]
 
 
@@ -1444,8 +1468,8 @@ lemma temp_one: exists-trace
 		A id_Alice tid_Alice id_CPU_1
 		B id_Boris tid_Boris id_CPU_2
 		tid_QE_1 tid_QE_2 tid_CPU_1 tid_CPU_2
-		m7 m8 m9 m10 m11 m12
-	#t11 #t14
+		m7 m8 m9 m10 m11 m12 m13
+	#t11 #t14 #t15
 	#t22 #t23
 	#t51 #t52.
 
@@ -1454,7 +1478,8 @@ lemma temp_one: exists-trace
 	Progress_QE(tid_QE_2, tid_CPU_2, m8, m9) @ t51 &
 	Progress_B3(tid_Boris, B, id_Boris, id_CPU_2, m9, m10) @ t23 &
 	Progress_A4(tid_Alice, A, id_Alice, id_CPU_1, m10, m11) @ t14 &
-	Progress_QE(tid_QE_1, tid_CPU_1, m11, m12) @ t52
+	Progress_QE(tid_QE_1, tid_CPU_1, m11, m12) @ t52 &
+	Progress_A5(tid_Alice, A, id_Alice, id_CPU_1, m12, m13) @ t15
 	"
 
 // /**
