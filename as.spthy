@@ -349,7 +349,8 @@ rule A5:
 		quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
 		m12 = AQuote
 
-		m13 = <AQuote, BQuote>
+		m13a = AQuote
+		m13b = BQuote
 	in
 	[
 		!Measurements(~id_Alice, ~MRENCLAVE_1, ~MRSIGNER_1),
@@ -359,10 +360,38 @@ rule A5:
 		!DH_public($B, BPublic),
 		In(m12)
 	]--[
-		Progress_A5(~tid_Alice, $A, ~id_Alice, ~id_CPU_1, m12, m13)
+		Progress_A5(~tid_Alice, $A, ~id_Alice, ~id_CPU_1, m12, m13a, m13b)
 	]->[
-		State_Enclave(~tid_Alice, 'RA', <~id_Alice, ~id_CPU_1, ~ANonce, ~BNonce, BQuote>),
-		Out(m13)
+		State_Enclave(~tid_Alice, 'RA', <~id_Alice, ~id_CPU_1, ~ANonce, ~BNonce, AQuote, BQuote>),
+		Out(m13a),
+		Out(m13b)
+	]
+
+rule A6:
+	let
+		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
+
+		AReport_body = <$A, ~id_CPU_1, ~MRENCLAVE_1, data>
+		AReport_content = <AReport_body>
+		AReport = <AReport_content, sign(AReport_content, ~priv_IAS)>
+		m16a = AReport
+
+		BReport_body = <$A, ~id_CPU_1, ~MRENCLAVE_1, data>
+		BReport_content = <BReport_body>
+		BReport = <BReport_content, sign(BReport_content, ~priv_IAS)>
+		m16b = BReport
+	in
+	[
+		!Measurements(~id_Alice, ~MRENCLAVE_1, ~MRSIGNER_1),
+		!License(~id_Alice, license),
+		State_Enclave(~tid_Alice, 'RA', <~id_Alice, ~id_CPU_1, ~ANonce, ~BNonce, AQuote, BQuote>),
+		!DH_public($A, APublic),
+		!DH_public($B, BPublic),
+		In(m16a),
+		In(m16b)
+	]--[
+		Progress_A6(~tid_Alice, $A, ~id_Alice, ~id_CPU_1, m16a, m16b)
+	]->[
 	]
 
 
@@ -1468,10 +1497,12 @@ lemma temp_one: exists-trace
 		A id_Alice tid_Alice id_CPU_1
 		B id_Boris tid_Boris id_CPU_2
 		tid_QE_1 tid_QE_2 tid_CPU_1 tid_CPU_2
-		m7 m8 m9 m10 m11 m12 m13
-	#t11 #t14 #t15
+		id_IAS
+		m7 m8 m9 m10 m11 m12 m13a m13b m16a m16b
+	#t11 #t14 #t15 #t16
 	#t22 #t23
-	#t51 #t52.
+	#t51 #t52
+	#t71 #t72.
 
 	Progress_A1(tid_Alice, A, id_Alice, id_CPU_1, m7) @ t11 &
 	Progress_B2(tid_Boris, B, id_Boris, id_CPU_2, m7, m8) @ t22 &
@@ -1479,7 +1510,10 @@ lemma temp_one: exists-trace
 	Progress_B3(tid_Boris, B, id_Boris, id_CPU_2, m9, m10) @ t23 &
 	Progress_A4(tid_Alice, A, id_Alice, id_CPU_1, m10, m11) @ t14 &
 	Progress_QE(tid_QE_1, tid_CPU_1, m11, m12) @ t52 &
-	Progress_A5(tid_Alice, A, id_Alice, id_CPU_1, m12, m13) @ t15
+	Progress_A5(tid_Alice, A, id_Alice, id_CPU_1, m12, m13a, m13b) @ t15 &
+	Progress_IAS(id_IAS, m13a, m16a) @ t71 &
+	Progress_IAS(id_IAS, m13b, m16b) @ t72 &
+	Progress_A6(tid_Alice, A, id_Alice, id_CPU_1, m16a, m16b) @ t16
 	"
 
 // /**
