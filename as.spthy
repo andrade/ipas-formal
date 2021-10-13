@@ -262,7 +262,7 @@ rule A1:
 		Out(m7)
 	]
 
-rule B1:
+rule B2:
 	let
 		m7 = <~ANonce, APublic>
 
@@ -284,10 +284,36 @@ rule B1:
 		!DH_public($B, BPublic),
 		In(m7)
 	]--[
-		Progress_B1(~tid_Boris, $B, ~id_Boris, ~id_CPU_2, m7, m8)
+		Progress_B2(~tid_Boris, $B, ~id_Boris, ~id_CPU_2, m7, m8)
 	]->[
 		State_Enclave(~tid_Boris, 'TODO', <~id_Boris, ~id_CPU_2, ~BNonce, ~ANonce>),
 		Out(m8)
+	]
+
+rule B3:
+	let
+		// license = <~id_Boris, ~id_IAS, sign(~id_Boris, ~priv_IAS), pk(~priv_IAS)>
+
+		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
+		body = <$B, ~id_CPU_2, ~MRENCLAVE_2, data>
+		content = <body>
+		quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
+		m9 = quote
+
+		m10 = <quote, ~BNonce, BPublic>
+	in
+	[
+		!Measurements(~id_Boris, ~MRENCLAVE_2, ~MRSIGNER_2),
+		!License(~id_Boris, license),
+		State_Enclave(~tid_Boris, 'TODO', <~id_Boris, ~id_CPU_2, ~BNonce, ~ANonce>),
+		!DH_public($A, APublic),
+		!DH_public($B, BPublic),
+		In(m9)
+	]--[
+		Progress_B3(~tid_Boris, $B, ~id_Boris, ~id_CPU_2, m9, m10)
+	]->[
+		// State_Enclave(~tid_Boris, 'TODO', <~id_Boris, ~id_CPU_2, ~BNonce, ~ANonce>),
+		// Out(m10)
 	]
 
 
@@ -1392,12 +1418,16 @@ lemma temp_one: exists-trace
 	Ex
 		A id_Alice tid_Alice id_CPU_1
 		B id_Boris tid_Boris id_CPU_2
-		m7 m8
-	#t1
-	#t2.
+		tid_QE_2 tid_CPU_2
+		m7 m8 m9 m10
+	#t11
+	#t22 #t23
+	#t51.
 
-	Progress_A1(tid_Alice, A, id_Alice, id_CPU_1, m7) @ t1 &
-	Progress_B1(tid_Boris, B, id_Boris, id_CPU_2, m7, m8) @ t2
+	Progress_A1(tid_Alice, A, id_Alice, id_CPU_1, m7) @ t11 &
+	Progress_B2(tid_Boris, B, id_Boris, id_CPU_2, m7, m8) @ t22 &
+	Progress_QE(tid_QE_2, tid_CPU_2, m8, m9) @ t51 &
+	Progress_B3(tid_Boris, B, id_Boris, id_CPU_2, m9, m10) @ t23
 	"
 
 // /**
