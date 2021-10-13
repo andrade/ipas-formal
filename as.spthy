@@ -1443,17 +1443,18 @@ lemma temp_one: exists-trace
 	Ex
 		A id_Alice tid_Alice id_CPU_1
 		B id_Boris tid_Boris id_CPU_2
-		tid_QE_2 tid_CPU_2
-		m7 m8 m9 m10 m11
+		tid_QE_1 tid_QE_2 tid_CPU_1 tid_CPU_2
+		m7 m8 m9 m10 m11 m12
 	#t11 #t14
 	#t22 #t23
-	#t51.
+	#t51 #t52.
 
 	Progress_A1(tid_Alice, A, id_Alice, id_CPU_1, m7) @ t11 &
 	Progress_B2(tid_Boris, B, id_Boris, id_CPU_2, m7, m8) @ t22 &
 	Progress_QE(tid_QE_2, tid_CPU_2, m8, m9) @ t51 &
 	Progress_B3(tid_Boris, B, id_Boris, id_CPU_2, m9, m10) @ t23 &
-	Progress_A4(tid_Alice, A, id_Alice, id_CPU_1, m10, m11) @ t14
+	Progress_A4(tid_Alice, A, id_Alice, id_CPU_1, m10, m11) @ t14 &
+	Progress_QE(tid_QE_1, tid_CPU_1, m11, m12) @ t52
 	"
 
 // /**
