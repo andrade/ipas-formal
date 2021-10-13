@@ -337,8 +337,8 @@ rule A4:
 	]--[
 		Progress_A4(~tid_Alice, $A, ~id_Alice, ~id_CPU_1, m10, m11)
 	]->[
-		// State_Enclave(~tid_Alice, 'TODO', <~id_Alice, ~id_CPU_1, ~ANonce>),
-		// Out(m11)
+		State_Enclave(~tid_Alice, 'LA', <~id_Alice, ~id_CPU_1, ~ANonce>),
+		Out(m11)
 	]
 
 
