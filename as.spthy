@@ -106,7 +106,7 @@ rule Binding:
 		State_Enclave(~tid_Enclave, 'bound', <~id_Enclave, ~id_CPU>)
 	]
 
-rule Frank_1:
+rule Frank_1 [color=F5CBA7]:
 let
 	report_key = sgx_get_key(<~MRENCLAVE, 'report', real(~id_CPU)>)
 
@@ -129,7 +129,7 @@ in
 	Out(report)
 ]
 
-rule Frank_2:
+rule Frank_2 [color=F5CBA7]:
 let
 	si = <~hF>
 	so = <~hF>
@@ -148,7 +148,7 @@ in
 	Out(quote)
 ]
 
-rule Frank_3:
+rule Frank_3 [color=F5CBA7]:
 let
 	si = <~hF>
 
@@ -183,7 +183,7 @@ rule DH:
 // rule Reveal_ltk:
 // 	[ !Ltk(id, ltk) ]--[ Reveal(id) ]->[ Out(ltk) ]
 
-rule A1:
+rule A1 [color=D7BDE2]:
 	let
 		m7 = <~ANonce, APublic>
 	in
@@ -201,7 +201,7 @@ rule A1:
 		Out(m7)
 	]
 
-rule B2:
+rule B2 [color=D2B4DE]:
 	let
 		m7 = <~ANonce, APublic>
 
@@ -229,7 +229,7 @@ rule B2:
 		Out(m8)
 	]
 
-rule B3:
+rule B3 [color=D2B4DE]:
 	let
 		// license = <~id_Boris, ~id_IAS, sign(~id_Boris, ~priv_IAS), pk(~priv_IAS)>
 
@@ -255,7 +255,7 @@ rule B3:
 		Out(m10)
 	]
 
-rule A4:
+rule A4 [color=D7BDE2]:
 	let
 		m10 = <BQuote, ~BNonce, BPublic>
 
@@ -280,7 +280,7 @@ rule A4:
 		Out(m11)
 	]
 
-rule A5:
+rule A5 [color=D7BDE2]:
 	let
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 		body = <$A, ~id_CPU_1, ~MRENCLAVE_1, data>
@@ -306,7 +306,7 @@ rule A5:
 		Out(m13b)
 	]
 
-rule A6:
+rule A6 [color=D7BDE2]:
 	let
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 
@@ -337,7 +337,7 @@ rule A6:
 		Out(m17)
 	]
 
-rule B4:
+rule B4 [color=D2B4DE]:
 	let
 		// license = <~id_Boris, ~id_IAS, sign(~id_Boris, ~priv_IAS), pk(~priv_IAS)>
 
@@ -373,7 +373,7 @@ rule B4:
 		Out(m18)
 	]
 
-rule A7:
+rule A7 [color=D7BDE2]:
 	let
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 
