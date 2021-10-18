@@ -171,7 +171,7 @@ in
 ]->[
 ]
 
-rule DH:
+rule DH [color=F4D03F]:
 	[ Fr(~k) ]-->[ !DH_private($id, ~k), !DH_public($id, 'g'^~k), Out('g'^~k) ]
 
 // rule Register_pk:
