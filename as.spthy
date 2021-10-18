@@ -188,7 +188,7 @@ rule A1 [color=D7BDE2]:
 		m7 = <~ANonce, APublic>
 	in
 	[
-		!Measurements(~id_Alice, ~MRENCLAVE_1, ~MRSIGNER_1),
+		!Measurements(~id_Alice, ~MRENCLAVE, ~MRSIGNER),
 		!License(~id_Alice, license),
 		State_Enclave(~tid_Alice, 'bound', <~id_Alice, ~id_CPU_1>),
 		Fr(~ANonce),
@@ -205,18 +205,18 @@ rule B2 [color=D2B4DE]:
 	let
 		m7 = <~ANonce, APublic>
 
-		report_key = sgx_get_key(<~MRENCLAVE_2, 'report', real(~id_CPU_2)>)
+		report_key = sgx_get_key(<~MRENCLAVE, 'report', real(~id_CPU_2)>)
 
 		// data = h(<APublic, BPublic, VK>)
 		// REVIEW Utilizo os nonces em vez de VK
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
-		body = <$B, ~id_CPU_2, ~MRENCLAVE_2, data>
+		body = <$B, ~id_CPU_2, ~MRENCLAVE, data>
 		report = <body, CMAC(body, report_key)>
 
 		m8 = report
 	in
 	[
-		!Measurements(~id_Boris, ~MRENCLAVE_2, ~MRSIGNER_2),
+		!Measurements(~id_Boris, ~MRENCLAVE, ~MRSIGNER),
 		!License(~id_Boris, license),
 		State_Enclave(~tid_Boris, 'bound', <~id_Boris, ~id_CPU_2>),
 		Fr(~BNonce),
@@ -234,7 +234,7 @@ rule B3 [color=D2B4DE]:
 		// license = <~id_Boris, ~id_IAS, sign(~id_Boris, ~priv_IAS), pk(~priv_IAS)>
 
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
-		body = <$B, ~id_CPU_2, ~MRENCLAVE_2, data>
+		body = <$B, ~id_CPU_2, ~MRENCLAVE, data>
 		content = <body>
 		quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
 		m9 = quote
@@ -242,7 +242,7 @@ rule B3 [color=D2B4DE]:
 		m10 = <quote, ~BNonce, BPublic>
 	in
 	[
-		!Measurements(~id_Boris, ~MRENCLAVE_2, ~MRSIGNER_2),
+		!Measurements(~id_Boris, ~MRENCLAVE, ~MRSIGNER),
 		!License(~id_Boris, license),
 		State_Enclave(~tid_Boris, 'LA', <~id_Boris, ~id_CPU_2, ~BNonce, ~ANonce>),
 		!DH_public($A, APublic),
@@ -259,16 +259,16 @@ rule A4 [color=D7BDE2]:
 	let
 		m10 = <BQuote, ~BNonce, BPublic>
 
-		report_key = sgx_get_key(<~MRENCLAVE_1, 'report', real(~id_CPU_1)>)
+		report_key = sgx_get_key(<~MRENCLAVE, 'report', real(~id_CPU_1)>)
 
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
-		body = <$A, ~id_CPU_1, ~MRENCLAVE_1, data>
+		body = <$A, ~id_CPU_1, ~MRENCLAVE, data>
 		report = <body, CMAC(body, report_key)>
 
 		m11 = report
 	in
 	[
-		!Measurements(~id_Alice, ~MRENCLAVE_1, ~MRSIGNER_1),
+		!Measurements(~id_Alice, ~MRENCLAVE, ~MRSIGNER),
 		!License(~id_Alice, license),
 		State_Enclave(~tid_Alice, 'TODO', <~id_Alice, ~id_CPU_1, ~ANonce>),
 		!DH_public($A, APublic),
@@ -283,7 +283,7 @@ rule A4 [color=D7BDE2]:
 rule A5 [color=D7BDE2]:
 	let
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
-		body = <$A, ~id_CPU_1, ~MRENCLAVE_1, data>
+		body = <$A, ~id_CPU_1, ~MRENCLAVE, data>
 		content = <body>
 		quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
 		m12 = AQuote
@@ -292,7 +292,7 @@ rule A5 [color=D7BDE2]:
 		m13b = BQuote
 	in
 	[
-		!Measurements(~id_Alice, ~MRENCLAVE_1, ~MRSIGNER_1),
+		!Measurements(~id_Alice, ~MRENCLAVE, ~MRSIGNER),
 		!License(~id_Alice, license),
 		State_Enclave(~tid_Alice, 'LA', <~id_Alice, ~id_CPU_1, ~ANonce, ~BNonce, BQuote>),
 		!DH_public($A, APublic),
@@ -310,12 +310,12 @@ rule A6 [color=D7BDE2]:
 	let
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 
-		AReport_body = <$A, ~id_CPU_1, ~MRENCLAVE_1, data>
+		AReport_body = <$A, ~id_CPU_1, ~MRENCLAVE, data>
 		AReport_content = <AReport_body>
 		AReport = <AReport_content, sign(AReport_content, ~priv_IAS)>
 		m16a = AReport
 
-		BReport_body = <$A, ~id_CPU_1, ~MRENCLAVE_1, data>
+		BReport_body = <$B, ~id_CPU_2, ~MRENCLAVE, data>
 		BReport_content = <BReport_body>
 		BReport = <BReport_content, sign(BReport_content, ~priv_IAS)>
 		m16b = BReport
@@ -323,7 +323,7 @@ rule A6 [color=D7BDE2]:
 		m17 = <AReport, BReport>
 	in
 	[
-		!Measurements(~id_Alice, ~MRENCLAVE_1, ~MRSIGNER_1),
+		!Measurements(~id_Alice, ~MRENCLAVE, ~MRSIGNER),
 		!License(~id_Alice, license),
 		State_Enclave(~tid_Alice, 'RA', <~id_Alice, ~id_CPU_1, ~ANonce, ~BNonce, AQuote, BQuote>),
 		!DH_public($A, APublic),
@@ -343,12 +343,12 @@ rule B4 [color=D2B4DE]:
 
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 
-		AReport_body = <$A, ~id_CPU_1, ~MRENCLAVE_1, data>
+		AReport_body = <$A, ~id_CPU_1, ~MRENCLAVE, data>
 		AReport_content = <AReport_body>
 		AReport = <AReport_content, sign(AReport_content, ~priv_IAS)>
 		m16a = AReport
 
-		BReport_body = <$A, ~id_CPU_1, ~MRENCLAVE_1, data>
+		BReport_body = <$B, ~id_CPU_2, ~MRENCLAVE, data>
 		BReport_content = <BReport_body>
 		BReport = <BReport_content, sign(BReport_content, ~priv_IAS)>
 
@@ -360,7 +360,7 @@ rule B4 [color=D2B4DE]:
 		m18 = 'OK'
 	in
 	[
-		!Measurements(~id_Boris, ~MRENCLAVE_2, ~MRSIGNER_2),
+		!Measurements(~id_Boris, ~MRENCLAVE, ~MRSIGNER),
 		!License(~id_Boris, license),
 		State_Enclave(~tid_Boris, 'TODO', <~id_Boris, ~id_CPU_2, ~BNonce, ~ANonce>),
 		!DH_public($A, APublic),
@@ -377,11 +377,11 @@ rule A7 [color=D7BDE2]:
 	let
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 
-		AReport_body = <$A, ~id_CPU_1, ~MRENCLAVE_1, data>
+		AReport_body = <$A, ~id_CPU_1, ~MRENCLAVE, data>
 		AReport_content = <AReport_body>
 		AReport = <AReport_content, sign(AReport_content, ~priv_IAS)>
 
-		BReport_body = <$A, ~id_CPU_1, ~MRENCLAVE_1, data>
+		BReport_body = <$B, ~id_CPU_2, ~MRENCLAVE, data>
 		BReport_content = <BReport_body>
 		BReport = <BReport_content, sign(BReport_content, ~priv_IAS)>
 
@@ -391,7 +391,7 @@ rule A7 [color=D7BDE2]:
 		SK = 'temp'
 	in
 	[
-		!Measurements(~id_Alice, ~MRENCLAVE_1, ~MRSIGNER_1),
+		!Measurements(~id_Alice, ~MRENCLAVE, ~MRSIGNER),
 		!License(~id_Alice, license),
 		State_Enclave(~tid_Alice, 'installing', <~id_Alice, ~id_CPU_1, ~ANonce, ~BNonce, AQuote, BQuote, AReport, BReport>),
 		!DH_public($A, APublic),
