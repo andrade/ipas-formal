@@ -592,7 +592,10 @@ lemma temp_one: exists-trace
 	Progress_IAS(id_IAS, m13b, m16b) @ t72 &
 	Progress_A6(tid_Alice, A, id_Enclave, id_CPU_1, m16a, m16b, m17) @ t16 &
 	Progress_B4(tid_Boris, B, id_Enclave, id_CPU_2, m17, m18, MK, SK) @ t24 &
-	Progress_A7(tid_Alice, A, id_Enclave, id_CPU_1, m18, MK, SK) @ t17
+	Progress_A7(tid_Alice, A, id_Enclave, id_CPU_1, m18, MK, SK) @ t17 &
+
+	t11 < t22 & t22 < t51 & t51 < t23 & t23 < t14 & t14 < t52 & t52 < t15 &
+	t15 < t71 & t15 < t72 & t71 < t16 & t72 < t16 & t16 < t24 & t24 < t17
 	"
 
 end
