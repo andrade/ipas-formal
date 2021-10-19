@@ -361,8 +361,9 @@ rule B4 [color=D2B4DE]:
 
 		m17 = <AReport, BReport>
 
-		MK = 'temp'
-		SK = 'temp'
+		KDK = APublic^~BPrivate
+		MK = CMAC('MK', KDK)
+		SK = CMAC('SK', KDK)
 
 		m18 = 'OK'
 	in
@@ -375,7 +376,7 @@ rule B4 [color=D2B4DE]:
 		!DH_public($B, BPublic),
 		In(m17)
 	]--[
-		Progress_B4(~tid_Boris, ~tid_Alice, $B, ~id_Enclave, ~id_CPU_2, m17, m18, MK, SK)
+		Progress_B4(~tid_Boris, ~tid_Alice, $B, ~id_Enclave, ~id_CPU_2, m17, m18, MK, SK, ~BPrivate)
 	]->[
 		State_Enclave(~tid_Boris, 'done', <~id_Enclave, ~id_CPU_2, ~tid_Alice, MK, SK>),
 		Out(m18)
@@ -395,8 +396,9 @@ rule A7 [color=D7BDE2]:
 
 		m18 = 'OK'
 
-		MK = 'temp'
-		SK = 'temp'
+		KDK = BPublic^~APrivate
+		MK = CMAC('MK', KDK)
+		SK = CMAC('SK', KDK)
 	in
 	[
 		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
@@ -407,7 +409,7 @@ rule A7 [color=D7BDE2]:
 		!DH_public($B, BPublic),
 		In(m18)
 	]--[
-		Progress_A7(~tid_Alice, ~tid_Boris, $A, ~id_Enclave, ~id_CPU_1, m18, MK, SK)
+		Progress_A7(~tid_Alice, ~tid_Boris, $A, ~id_Enclave, ~id_CPU_1, m18, MK, SK, ~APrivate)
 	]->[
 		State_Enclave(~tid_Alice, 'done', <~id_Enclave, ~id_CPU_1, ~tid_Boris, MK, SK>)
 	]
@@ -583,7 +585,7 @@ lemma temp_one: exists-trace
 		id_Enclave MRENCLAVE MRSIGNER
 		id_QE_1 id_QE_2 tid_QE_1 tid_QE_2 tid_CPU_1 tid_CPU_2
 		id_IAS
-		MK SK
+		MK SK APrivate BPrivate
 		m7 m8 m9 m10 m11 m12 m13a m13b m16a m16b m17 m18
 	#s1 #s2 #s3 #s4 #s5 #s6
 	#s11 #s12 #s13 #s15 #s16
@@ -591,6 +593,8 @@ lemma temp_one: exists-trace
 	#t22 #t23 #t24
 	#t51 #t52
 	#t71 #t72.
+
+	not( APrivate = BPrivate ) &
 
 	Create_IAS(id_IAS) @ s1 &
 	Create_CPU(id_CPU_1) @ s2 &
@@ -615,8 +619,8 @@ lemma temp_one: exists-trace
 	Progress_IAS(id_IAS, m13a, m16a) @ t71 &
 	Progress_IAS(id_IAS, m13b, m16b) @ t72 &
 	Progress_A6(tid_Alice, tid_Boris, A, id_Enclave, id_CPU_1, m16a, m16b, m17) @ t16 &
-	Progress_B4(tid_Boris, tid_Alice, B, id_Enclave, id_CPU_2, m17, m18, MK, SK) @ t24 &
-	Progress_A7(tid_Alice, tid_Boris, A, id_Enclave, id_CPU_1, m18, MK, SK) @ t17 &
+	Progress_B4(tid_Boris, tid_Alice, B, id_Enclave, id_CPU_2, m17, m18, MK, SK, BPrivate) @ t24 &
+	Progress_A7(tid_Alice, tid_Boris, A, id_Enclave, id_CPU_1, m18, MK, SK, APrivate) @ t17 &
 
 	t11 < t22 & t22 < t51 & t51 < t23 & t23 < t14 & t14 < t52 & t52 < t15 &
 	t15 < t71 & t15 < t72 & t71 < t16 & t72 < t16 & t16 < t24 & t24 < t17
