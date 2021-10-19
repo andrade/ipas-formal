@@ -246,8 +246,8 @@ rule B3 [color=D2B4DE]:
 		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
 		!License(~id_Enclave, license),
 		State_Enclave(~tid_Boris, 'LA', <~id_Enclave, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, ~tid_Alice, ~ANonce, APublic>),
-		// !DH_public($A, APublic),
-		// !DH_public($B, BPublic),
+		!DH_public($A, APublic),
+		!DH_public($B, BPublic),
 		In(m9)
 	]--[
 		Progress_B3(~tid_Boris, ~tid_Alice, $B, ~id_Enclave, ~id_CPU_2, m9, m10)
@@ -273,7 +273,7 @@ rule A4 [color=D7BDE2]:
 		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
 		!License(~id_Enclave, license),
 		State_Enclave(~tid_Alice, 'TODO', <~id_Enclave, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic>),
-		// !DH_public($A, APublic),
+		!DH_public($A, APublic),
 		In(m10)
 	]--[
 		Progress_A4(~tid_Alice, ~tid_Boris, $A, ~id_Enclave, ~id_CPU_1, m10, m11)
@@ -299,8 +299,8 @@ rule A5 [color=D7BDE2]:
 		!License(~id_Enclave, license),
 		// State_Enclave(~tid_Alice, 'LA', <~id_Enclave, ~id_CPU_1, ~ANonce, ~BNonce, BQuote>),
 		State_Enclave(~tid_Alice, 'LA', <~id_Enclave, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, ~tid_Boris, ~BNonce, BPublic, BQuote>),
-		// !DH_public($A, APublic),
-		// !DH_public($B, BPublic),
+		!DH_public($A, APublic),
+		!DH_public($B, BPublic),
 		In(m12)
 	]--[
 		Progress_A5(~tid_Alice, ~tid_Boris, $A, ~id_Enclave, ~id_CPU_1, m12, m13a, m13b)
@@ -332,8 +332,8 @@ rule A6 [color=D7BDE2]:
 		!License(~id_Enclave, license),
 		// State_Enclave(~tid_Alice, 'RA', <~id_Enclave, ~id_CPU_1, ~ANonce, ~BNonce, AQuote, BQuote>),
 		State_Enclave(~tid_Alice, 'RA', <~id_Enclave, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, AQuote, ~tid_Boris, ~BNonce, BPublic, BQuote>),
-		// !DH_public($A, APublic),
-		// !DH_public($B, BPublic),
+		!DH_public($A, APublic),
+		!DH_public($B, BPublic),
 		In(m16a),
 		In(m16b)
 	]--[
@@ -371,8 +371,8 @@ rule B4 [color=D2B4DE]:
 		!License(~id_Enclave, license),
 		// State_Enclave(~tid_Boris, 'TODO', <~id_Enclave, ~id_CPU_2, ~BNonce, ~ANonce>),
 		State_Enclave(~tid_Boris, 'TODO', <~id_Enclave, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, BQuote, ~tid_Alice, ~ANonce, APublic>),
-		// !DH_public($A, APublic),
-		// !DH_public($B, BPublic),
+		!DH_public($A, APublic),
+		!DH_public($B, BPublic),
 		In(m17)
 	]--[
 		Progress_B4(~tid_Boris, ~tid_Alice, $B, ~id_Enclave, ~id_CPU_2, m17, m18, MK, SK)
@@ -403,8 +403,8 @@ rule A7 [color=D7BDE2]:
 		!License(~id_Enclave, license),
 		// State_Enclave(~tid_Alice, 'installing', <~id_Enclave, ~id_CPU_1, ~ANonce, ~BNonce, AQuote, BQuote, AReport, BReport>),
 		State_Enclave(~tid_Alice, 'installing', <~id_Enclave, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, AQuote, ~tid_Boris, ~BNonce, BPublic, BQuote, AReport, BReport>),
-		// !DH_public($A, APublic),
-		// !DH_public($B, BPublic),
+		!DH_public($A, APublic),
+		!DH_public($B, BPublic),
 		In(m18)
 	]--[
 		Progress_A7(~tid_Alice, ~tid_Boris, $A, ~id_Enclave, ~id_CPU_1, m18, MK, SK)
