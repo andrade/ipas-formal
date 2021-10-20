@@ -657,6 +657,16 @@ lemma session_keys: exists-trace
 		)
 	"
 
+lemma session_keys_secrecy:
+	"not(
+		Ex A B MK SK #k.
+			SessionKeys(A, B, MK, SK) @k &
+			((Ex #i. K(MK) @i) | (Ex #i. K(SK) @i)) &
+			not(Ex #r. Leak_private_DH(A) @ r) &
+			not(Ex #r. Leak_private_DH(B) @ r)
+	)
+	"
+
 lemma honest_keys: exists-trace
 	"Ex
 		A tid_Alice id_CPU_1
