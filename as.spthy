@@ -313,6 +313,8 @@ rule A5 [color=D7BDE2]:
 
 rule A6 [color=D7BDE2]:
 	let
+		license = <~id_Enclave, ~id_IAS, sign(~id_Enclave, ~priv_IAS), pub_IAS>
+
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 
 		AReport_body = <$A, ~id_CPU_1, ~MRENCLAVE, data>
@@ -337,7 +339,9 @@ rule A6 [color=D7BDE2]:
 		In(m16a),
 		In(m16b)
 	]--[
-		Progress_A6(~tid_Alice, ~tid_Boris, $A, ~id_Enclave, ~id_CPU_1, m16a, m16b, m17)
+		Progress_A6(~tid_Alice, ~tid_Boris, $A, ~id_Enclave, ~id_CPU_1, m16a, m16b, m17),
+
+		Eq(true, verify(sign(AReport_content, ~priv_IAS), AReport_content, pub_IAS))
 	]->[
 		// State_Enclave(~tid_Alice, 'installing', <~id_Enclave, ~id_CPU_1, ~ANonce, ~BNonce, AQuote, BQuote, AReport, BReport>),
 		State_Enclave(~tid_Alice, 'installing', <~id_Enclave, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, AQuote, ~tid_Boris, ~BNonce, BPublic, BQuote, AReport, BReport>),
@@ -346,7 +350,7 @@ rule A6 [color=D7BDE2]:
 
 rule B4 [color=D2B4DE]:
 	let
-		// license = <~id_Enclave, ~id_IAS, sign(~id_Enclave, ~priv_IAS), pk(~priv_IAS)>
+		license = <~id_Enclave, ~id_IAS, sign(~id_Enclave, ~priv_IAS), pub_IAS>
 
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 
@@ -376,7 +380,9 @@ rule B4 [color=D2B4DE]:
 		!DH_public($B, BPublic),
 		In(m17)
 	]--[
-		Progress_B4(~tid_Boris, ~tid_Alice, $B, ~id_Enclave, ~id_CPU_2, m17, m18, MK, SK, ~BPrivate)
+		Progress_B4(~tid_Boris, ~tid_Alice, $B, ~id_Enclave, ~id_CPU_2, m17, m18, MK, SK, ~BPrivate),
+
+		Eq(true, verify(sign(AReport_content, ~priv_IAS), AReport_content, pub_IAS))
 	]->[
 		State_Enclave(~tid_Boris, 'done', <~id_Enclave, ~id_CPU_2, ~tid_Alice, MK, SK>),
 		Out(m18)
@@ -384,6 +390,8 @@ rule B4 [color=D2B4DE]:
 
 rule A7 [color=D7BDE2]:
 	let
+		license = <~id_Enclave, ~id_IAS, sign(~id_Enclave, ~priv_IAS), pub_IAS>
+
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 
 		AReport_body = <$A, ~id_CPU_1, ~MRENCLAVE, data>
@@ -409,7 +417,9 @@ rule A7 [color=D7BDE2]:
 		!DH_public($B, BPublic),
 		In(m18)
 	]--[
-		Progress_A7(~tid_Alice, ~tid_Boris, $A, ~id_Enclave, ~id_CPU_1, m18, MK, SK, ~APrivate)
+		Progress_A7(~tid_Alice, ~tid_Boris, $A, ~id_Enclave, ~id_CPU_1, m18, MK, SK, ~APrivate),
+
+		Eq(true, verify(sign(AReport_content, ~priv_IAS), AReport_content, pub_IAS))
 	]->[
 		State_Enclave(~tid_Alice, 'done', <~id_Enclave, ~id_CPU_1, ~tid_Boris, MK, SK>)
 	]
