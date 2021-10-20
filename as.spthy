@@ -626,4 +626,21 @@ lemma temp_one: exists-trace
 	t15 < t71 & t15 < t72 & t71 < t16 & t72 < t16 & t16 < t24 & t24 < t17
 	"
 
+lemma honest_keys: exists-trace
+	"Ex
+		A tid_Alice id_CPU_1
+		B tid_Boris id_CPU_2
+		id_Enclave
+		m1 m2
+		MK SK APrivate BPrivate
+	#t1 #t2.
+
+	not(APrivate=BPrivate) &
+
+	Progress_B4(tid_Boris, tid_Alice, B, id_Enclave, id_CPU_2, m1, m2, MK, SK, BPrivate) @ t1 &
+	Progress_A7(tid_Alice, tid_Boris, A, id_Enclave, id_CPU_1, m2, MK, SK, APrivate) @ t2 &
+
+	t1 < t2
+	"
+
 end
