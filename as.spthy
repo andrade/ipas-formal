@@ -174,6 +174,9 @@ in
 rule DH [color=F4D03F]:
 	[ Fr(~k) ]-->[ !DH_private($id, ~k), !DH_public($id, 'g'^~k), Out('g'^~k) ]
 
+rule Reveal_DH:
+	[ !DH_private(id, k) ]--[ Leak_private_DH(id) ]->[ Out(k) ]
+
 // rule Register_pk:
 // 	[ Fr(~ltk) ]-->[ !Ltk($id, ~ltk), !Pk($id, pk(~ltk)) ]
 //
@@ -380,6 +383,7 @@ rule B4 [color=D2B4DE]:
 		!DH_public($B, BPublic),
 		In(m17)
 	]--[
+		SessionKeys($A, $B, MK, SK),
 		Progress_B4(~tid_Boris, ~tid_Alice, $B, ~id_Enclave, ~id_CPU_2, m17, m18, MK, SK, ~BPrivate),
 
 		Eq(true, verify(sign(AReport_content, ~priv_IAS), AReport_content, pub_IAS))
@@ -417,6 +421,7 @@ rule A7 [color=D7BDE2]:
 		!DH_public($B, BPublic),
 		In(m18)
 	]--[
+		SessionKeys($A, $B, MK, SK),
 		Progress_A7(~tid_Alice, ~tid_Boris, $A, ~id_Enclave, ~id_CPU_1, m18, MK, SK, ~APrivate),
 
 		Eq(true, verify(sign(AReport_content, ~priv_IAS), AReport_content, pub_IAS))
@@ -634,6 +639,22 @@ lemma temp_one: exists-trace
 
 	t11 < t22 & t22 < t51 & t51 < t23 & t23 < t14 & t14 < t52 & t52 < t15 &
 	t15 < t71 & t15 < t72 & t71 < t16 & t72 < t16 & t16 < t24 & t24 < t17
+	"
+
+/**
+** Ensure session keys can be setup between honest agents.
+**
+** There is a trace where all equality checks are satisfied and
+** session keys MK, SK are setup without revealing private DH keys.
+**/
+lemma session_keys: exists-trace
+	"
+		(All x y #i. Eq(x,y)@i ==> x=y) &
+		(Ex A B MK SK #k.
+			SessionKeys(A, B, MK, SK) @ k &
+			not(Ex #r. Leak_private_DH(A) @ r) &
+			not(Ex #r. Leak_private_DH(B) @ r)
+		)
 	"
 
 lemma honest_keys: exists-trace
