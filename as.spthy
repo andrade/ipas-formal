@@ -40,8 +40,8 @@ rule Create_Enclave:
 	]--[
 		Create_Enclave(~id_Enclave, ~MRENCLAVE, ~MRSIGNER)
 	]->[
-		ID_Enclave(~id_Enclave),
-		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
+		ID_Enclave(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
+		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
 		Out(~id_Enclave),
 		Out(~MRENCLAVE),
 		Out(~MRSIGNER)
@@ -78,13 +78,13 @@ rule Provisioning:
 rule Licensing:
 	let
 		// Enclave ID, IAS ID, IAS signature over Enclave ID, IAS public key
-		license = <~id_Enclave, ~id_IAS, sign(~id_Enclave, ~priv_IAS), pk(~priv_IAS)>
+		license = <~id_Enclave, ~MRENCLAVE, ~MRSIGNER, ~id_IAS, sign(<~id_Enclave, ~MRENCLAVE, ~MRSIGNER>, ~priv_IAS), pk(~priv_IAS)>
 	in
 	[
-		!ID_IAS(~id_IAS),
+		// !ID_IAS(~id_IAS),
 		!Keys_IAS(~id_IAS, ~priv_IAS),
-		ID_Enclave(~id_Enclave),
-		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER)
+		ID_Enclave(~id_Enclave, ~MRENCLAVE, ~MRSIGNER)
+		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER)
 	]--[
 		Licensing(~id_Enclave, ~id_IAS)
 	]->[
@@ -95,7 +95,7 @@ rule Licensing:
 rule Binding:
 	[
 		!State_CPU(~tid_CPU, 'Provisioning_CPU', <~id_CPU, ~tid_QE, ~id_QE, ~id_IAS, sign(~id_CPU, ~priv_IAS), pk(~priv_IAS)>),
-		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
+		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
 		!License(~id_Enclave, license),
 		Fr(~tid_Enclave)
 		// isto acaba por ser Thread ID de instância do enclave
@@ -103,7 +103,7 @@ rule Binding:
 	]--[
 		Binding(~tid_Enclave, ~id_Enclave, ~id_CPU, ~tid_CPU)
 	]->[
-		State_Enclave(~tid_Enclave, 'bound', <~id_Enclave, ~tid_CPU, ~id_CPU>)
+		State_Enclave(~tid_Enclave, 'bound', <~id_Enclave, license, ~tid_CPU, ~id_CPU>)
 	]
 
 /*rule Frank_1 [color=F5CBA7]:
@@ -188,13 +188,13 @@ rule Reveal_DH:
 
 rule Connect:
 	[
-		State_Enclave(~tid_E1, 'bound', <~id_Enclave, ~tid_CPU_1, ~id_CPU_1>),
-		State_Enclave(~tid_E2, 'bound', <~id_Enclave, ~tid_CPU_2, ~id_CPU_2>)
+		State_Enclave(~tid_E1, 'bound', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1>),
+		State_Enclave(~tid_E2, 'bound', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2>)
 	]--[
 		Connected(~tid_E1, ~tid_E2)
 	]->[
-		State_Enclave(~tid_E1, 'connected', <~id_Enclave, ~tid_CPU_1, ~id_CPU_1, ~tid_E2>),
-		State_Enclave(~tid_E2, 'connected', <~id_Enclave, ~tid_CPU_2, ~id_CPU_2, ~tid_E1>),
+		State_Enclave(~tid_E1, 'connected', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, ~tid_E2>),
+		State_Enclave(~tid_E2, 'connected', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2, ~tid_E1>),
 
 		Out(~tid_E1),
 		Out(~tid_E2)
@@ -205,21 +205,23 @@ rule A1 [color=D7BDE2]:
 		m7 = <~ANonce, APublic>
 	in
 	[
-		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
-		!License(~id_Enclave, license),
-		State_Enclave(~tid_Alice, 'connected', <~id_Enclave, ~tid_CPU_1, ~id_CPU_1, ~tid_Boris>),
+		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
+		// !License(~id_Enclave, license),
+		State_Enclave(~tid_Alice, 'connected', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, ~tid_Boris>),
 		Fr(~ANonce),
 		!DH_private($A, ~APrivate),
 		!DH_public($A, APublic)
 	]--[
 		Progress_A1(~tid_Alice, ~tid_CPU_1, $A, ~id_Enclave, ~id_CPU_1, m7)
 	]->[
-		State_Enclave(~tid_Alice, 'TODO', <~id_Enclave, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, ~tid_Boris>),
+		State_Enclave(~tid_Alice, 'TODO', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, ~tid_Boris>),
 		Out(m7)
 	]
 
 rule B2 [color=D2B4DE]:
 	let
+		license = <~id_Enclave, ~MRENCLAVE, ~MRSIGNER, ~id_IAS, sign(<~id_Enclave, ~MRENCLAVE, ~MRSIGNER>, ~priv_IAS), pk(~priv_IAS)>
+
 		m7 = <~ANonce, APublic>
 
 		report_key = sgx_get_key(<~MRENCLAVE, 'report', real(~id_CPU_2)>)
@@ -233,9 +235,9 @@ rule B2 [color=D2B4DE]:
 		m8 = report
 	in
 	[
-		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
-		!License(~id_Enclave, license),
-		State_Enclave(~tid_Boris, 'connected', <~id_Enclave, ~tid_CPU_2, ~id_CPU_2, ~tid_Alice>),
+		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
+		// !License(~id_Enclave, license),
+		State_Enclave(~tid_Boris, 'connected', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2, ~tid_Alice>),
 		Fr(~BNonce),
 		!DH_private($B, ~BPrivate),
 		!DH_public($B, BPublic),
@@ -243,36 +245,39 @@ rule B2 [color=D2B4DE]:
 	]--[
 		Progress_B2(~tid_Boris, ~tid_Alice, ~tid_CPU_2, $B, ~id_Enclave, ~id_CPU_2, m7, m8)
 	]->[
-		State_Enclave(~tid_Boris, 'LA', <~id_Enclave, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, ~tid_Alice, ~ANonce, APublic>),
+		State_Enclave(~tid_Boris, 'LA', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, ~tid_Alice, ~ANonce, APublic>),
 		Out(m8)
 	]
 
 rule B3 [color=D2B4DE]:
 	let
-		license = <~id_Enclave, ~id_IAS, sign(~id_Enclave, ~priv_IAS), pk(~priv_IAS)>
+		license = <~id_Enclave, ~MRENCLAVE, ~MRSIGNER, ~id_IAS, sign(<~id_Enclave, ~MRENCLAVE, ~MRSIGNER>, ~priv_IAS), pk(~priv_IAS)>
 
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 		body = <$B, ~id_CPU_2, ~MRENCLAVE, data>
 		content = <body>
 		quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
 		m9 = quote
+		// TODO modificar quote e talvez remover este bloco, licença, etc.
 
 		m10 = <~BNonce, BPublic, quote>
 	in
 	[
-		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
-		!License(~id_Enclave, license),
-		State_Enclave(~tid_Boris, 'LA', <~id_Enclave, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, ~tid_Alice, ~ANonce, APublic>),
+		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
+		// !License(~id_Enclave, license),
+		State_Enclave(~tid_Boris, 'LA', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, ~tid_Alice, ~ANonce, APublic>),
 		In(m9)
 	]--[
 		Progress_B3(~tid_Boris, ~tid_Alice, ~tid_CPU_2, $B, ~id_Enclave, ~id_CPU_2, m9, m10)
 	]->[
-		State_Enclave(~tid_Boris, 'TODO', <~id_Enclave, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, quote, ~tid_Alice, ~ANonce, APublic>),
+		State_Enclave(~tid_Boris, 'TODO', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, quote, ~tid_Alice, ~ANonce, APublic>),
 		Out(m10)
 	]
 
 rule A4 [color=D7BDE2]:
 	let
+		license = <~id_Enclave, ~MRENCLAVE, ~MRSIGNER, ~id_IAS, sign(<~id_Enclave, ~MRENCLAVE, ~MRSIGNER>, ~priv_IAS), pk(~priv_IAS)>
+
 		m10 = <~BNonce, BPublic, BQuote>
 
 		report_key = sgx_get_key(<~MRENCLAVE, 'report', real(~id_CPU_1)>)
@@ -284,21 +289,21 @@ rule A4 [color=D7BDE2]:
 		m11 = report
 	in
 	[
-		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
-		!License(~id_Enclave, license),
-		State_Enclave(~tid_Alice, 'TODO', <~id_Enclave, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, ~tid_Boris>),
+		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
+		// !License(~id_Enclave, license),
+		State_Enclave(~tid_Alice, 'TODO', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, ~tid_Boris>),
 		// !DH_public($A, APublic),
 		In(m10)
 	]--[
 		Progress_A4(~tid_Alice, ~tid_Boris, ~tid_CPU_1, $A, ~id_Enclave, ~id_CPU_1, m10, m11)
 	]->[
-		State_Enclave(~tid_Alice, 'LA', <~id_Enclave, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, ~tid_Boris, ~BNonce, BPublic, BQuote>),
+		State_Enclave(~tid_Alice, 'LA', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, ~tid_Boris, ~BNonce, BPublic, BQuote>),
 		Out(m11)
 	]
 
 rule A5 [color=D7BDE2]:
 	let
-		license = <~id_Enclave, ~id_IAS, sign(~id_Enclave, ~priv_IAS), pk(~priv_IAS)>
+		license = <~id_Enclave, ~MRENCLAVE, ~MRSIGNER, ~id_IAS, sign(<~id_Enclave, ~MRENCLAVE, ~MRSIGNER>, ~priv_IAS), pk(~priv_IAS)>
 
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 		body = <$A, ~id_CPU_1, ~MRENCLAVE, data>
@@ -310,23 +315,23 @@ rule A5 [color=D7BDE2]:
 		m13b = BQuote
 	in
 	[
-		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
-		!License(~id_Enclave, license),
-		State_Enclave(~tid_Alice, 'LA', <~id_Enclave, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, ~tid_Boris, ~BNonce, BPublic, BQuote>),
+		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
+		// !License(~id_Enclave, license),
+		State_Enclave(~tid_Alice, 'LA', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, ~tid_Boris, ~BNonce, BPublic, BQuote>),
 		// !DH_public($A, APublic),
 		// !DH_public($B, BPublic),
 		In(m12)
 	]--[
 		Progress_A5(~tid_Alice, ~tid_Boris, ~tid_CPU_1, $A, ~id_Enclave, ~id_CPU_1, m12, m13a, m13b)
 	]->[
-		State_Enclave(~tid_Alice, 'RA', <~id_Enclave, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, AQuote, ~tid_Boris, ~BNonce, BPublic, BQuote>),
+		State_Enclave(~tid_Alice, 'RA', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, AQuote, ~tid_Boris, ~BNonce, BPublic, BQuote>),
 		Out(m13a),
 		Out(m13b)
 	]
 
 rule A6 [color=D7BDE2]:
 	let
-		license = <~id_Enclave, ~id_IAS, sign(~id_Enclave, ~priv_IAS), pub_IAS>
+		license = <~id_Enclave, ~MRENCLAVE, ~MRSIGNER, ~id_IAS, sign(<~id_Enclave, ~MRENCLAVE, ~MRSIGNER>, ~priv_IAS), pub_IAS>
 
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 
@@ -343,9 +348,9 @@ rule A6 [color=D7BDE2]:
 		m17 = <AReport, BReport>
 	in
 	[
-		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
-		!License(~id_Enclave, license),
-		State_Enclave(~tid_Alice, 'RA', <~id_Enclave, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, AQuote, ~tid_Boris, ~BNonce, BPublic, BQuote>),
+		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
+		// !License(~id_Enclave, license),
+		State_Enclave(~tid_Alice, 'RA', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, AQuote, ~tid_Boris, ~BNonce, BPublic, BQuote>),
 		// !DH_public($A, APublic),
 		// !DH_public($B, BPublic),
 		In(m16a),
@@ -357,13 +362,13 @@ rule A6 [color=D7BDE2]:
 
 		Eq(true, verify(sign(BReport_content, ~priv_IAS), BReport_content, pub_IAS))
 	]->[
-		State_Enclave(~tid_Alice, 'installing', <~id_Enclave, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, AQuote, ~tid_Boris, ~BNonce, BPublic, BQuote, AReport, BReport>),
+		State_Enclave(~tid_Alice, 'installing', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, AQuote, ~tid_Boris, ~BNonce, BPublic, BQuote, AReport, BReport>),
 		Out(m17)
 	]
 
 rule B4 [color=D2B4DE]:
 	let
-		license = <~id_Enclave, ~id_IAS, sign(~id_Enclave, ~priv_IAS), pub_IAS>
+		license = <~id_Enclave, ~MRENCLAVE, ~MRSIGNER, ~id_IAS, sign(<~id_Enclave, ~MRENCLAVE, ~MRSIGNER>, ~priv_IAS), pub_IAS>
 
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 
@@ -385,9 +390,9 @@ rule B4 [color=D2B4DE]:
 		m18 = 'OK'
 	in
 	[
-		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
-		!License(~id_Enclave, license),
-		State_Enclave(~tid_Boris, 'TODO', <~id_Enclave, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, BQuote, ~tid_Alice, ~ANonce, APublic>),
+		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
+		// !License(~id_Enclave, license),
+		State_Enclave(~tid_Boris, 'TODO', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, BQuote, ~tid_Alice, ~ANonce, APublic>),
 		// !DH_public($A, APublic),
 		// !DH_public($B, BPublic),
 		In(m17)
@@ -406,7 +411,7 @@ rule B4 [color=D2B4DE]:
 
 rule A7 [color=D7BDE2]:
 	let
-		license = <~id_Enclave, ~id_IAS, sign(~id_Enclave, ~priv_IAS), pub_IAS>
+		license = <~id_Enclave, ~MRENCLAVE, ~MRSIGNER, ~id_IAS, sign(<~id_Enclave, ~MRENCLAVE, ~MRSIGNER>, ~priv_IAS), pub_IAS>
 
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 
@@ -425,9 +430,9 @@ rule A7 [color=D7BDE2]:
 		SK = CMAC('SK', KDK)
 	in
 	[
-		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
-		!License(~id_Enclave, license),
-		State_Enclave(~tid_Alice, 'installing', <~id_Enclave, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, AQuote, ~tid_Boris, ~BNonce, BPublic, BQuote, AReport, BReport>),
+		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
+		// !License(~id_Enclave, license),
+		State_Enclave(~tid_Alice, 'installing', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, AQuote, ~tid_Boris, ~BNonce, BPublic, BQuote, AReport, BReport>),
 		// !DH_public($A, APublic),
 		// !DH_public($B, BPublic),
 		In(m18)
