@@ -24,7 +24,7 @@ rule Create_IAS:
 		OnlyOnce(),
 		Create_IAS(~id_IAS)
 	]->[
-		!ID_IAS(~id_IAS),
+		// !ID_IAS(~id_IAS),
 		!Keys_IAS(~id_IAS, ~priv_IAS), // root keys, we use single key pair
 		Out(~id_IAS)
 	]
@@ -60,7 +60,7 @@ rule Create_CPU:
 // Provision CPU and QE: essentially registers these two agents with Intel
 rule Provisioning:
 	[
-		!ID_IAS(~id_IAS),
+		// !ID_IAS(~id_IAS),
 		!Keys_IAS(~id_IAS, ~priv_IAS),
 		ID_QE(~id_QE),
 		ID_CPU(~id_CPU),
