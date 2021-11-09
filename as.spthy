@@ -218,7 +218,8 @@ rule A1 [color=D7BDE2]:
 		Progress_A1(~tid_Alice, ~tid_CPU_1, $A, ~id_Enclave, ~id_CPU_1, m7)
 	]->[
 		State_Enclave(~tid_Alice, 'TODO', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, ~tid_Boris>),
-		Out(m7)
+		Out(m7),
+		Out(~ANonce)
 	]
 
 rule B2 [color=D2B4DE]:
@@ -249,7 +250,9 @@ rule B2 [color=D2B4DE]:
 		Progress_B2(~tid_Boris, ~tid_Alice, ~tid_CPU_2, $B, ~id_Enclave, ~id_CPU_2, m7, m8)
 	]->[
 		State_Enclave(~tid_Boris, 'LA', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, ~tid_Alice, ~ANonce, APublic>),
-		Out(m8)
+		Out(m8),
+		Out(~BNonce),
+		Out(data)
 	]
 
 rule B3 [color=D2B4DE]:
@@ -301,7 +304,8 @@ rule A4 [color=D7BDE2]:
 		Progress_A4(~tid_Alice, ~tid_Boris, ~tid_CPU_1, $A, ~id_Enclave, ~id_CPU_1, m10, m11)
 	]->[
 		State_Enclave(~tid_Alice, 'LA', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, ~tid_Boris, ~BNonce, BPublic, BQuote>),
-		Out(m11)
+		Out(m11),
+		Out(data)
 	]
 
 rule A5 [color=D7BDE2]:
