@@ -709,6 +709,9 @@ lemma honest_keys: exists-trace
 	Progress_B4(tid_Boris, tid_Alice, tid_CPU_2, B, id_Enclave, id_CPU_2, m1, m2, MK, SK, BPrivate) @ t1 &
 	Progress_A7(tid_Alice, tid_Boris, tid_CPU_1, A, id_Enclave, id_CPU_1, m2, MK, SK, APrivate) @ t2 &
 
+	not(Ex #r. Leak_private_DH(APrivate) @ r) &
+	not(Ex #r. Leak_private_DH(BPrivate) @ r) &
+
 	t1 < t2
 	"
 
