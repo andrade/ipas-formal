@@ -466,6 +466,7 @@ let
 
 	// 5.15: Este body não devia interessar, desde que CMAC correto.
 	// 5.15: body = <$F, ~id_CPU, ~MRENCLAVE, data>
+	body = <id_Instance, ~id_CPU, ~MRENCLAVE, data>
 	report = <body, CMAC(body, report_key)>
 	content = <body>
 	quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
