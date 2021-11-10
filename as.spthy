@@ -71,7 +71,7 @@ rule Provisioning:
 	]--[
 		Provision(~id_QE, ~id_CPU, ~id_IAS, ~tid_QE, ~tid_CPU)
 	]->[
-		!State_QE(~tid_QE, 'idle', <~id_QE, ~tid_CPU, ~id_CPU, ~id_IAS, ~priv_QE, sign(pk(~priv_QE), ~priv_IAS), pk(~priv_IAS)>),
+		State_QE(~tid_QE, 'idle', <~id_QE, ~tid_CPU, ~id_CPU, ~id_IAS, ~priv_QE, sign(pk(~priv_QE), ~priv_IAS), pk(~priv_IAS)>),
 		!State_CPU(~tid_CPU, 'Provisioning_CPU', <~id_CPU, ~tid_QE, ~id_QE, ~id_IAS, sign(~id_CPU, ~priv_IAS), pk(~priv_IAS)>),
 		Out(pk(~priv_QE)),
 		Out(~tid_QE),
@@ -471,7 +471,7 @@ let
 	quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
 in
 [
-	!State_QE(~tid_QE, 'idle', <~id_QE, ~tid_CPU, ~id_CPU, ~id_IAS, ~priv_QE, sign(pk(~priv_QE), ~priv_IAS), pk(~priv_IAS)>),
+	State_QE(~tid_QE, 'idle', <~id_QE, ~tid_CPU, ~id_CPU, ~id_IAS, ~priv_QE, sign(pk(~priv_QE), ~priv_IAS), pk(~priv_IAS)>),
 	In(report)
 ]--[
 	Progress_QE(~tid_QE, ~tid_CPU, report, quote)
