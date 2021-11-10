@@ -205,7 +205,7 @@ rule Connect:
 
 rule A1 [color=D7BDE2]:
 	let
-		m7 = <~ANonce, APublic, ~tid_Alice, ~tid_Boris>
+		m7 = <~ANonce, APublic>
 	in
 	[
 		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
@@ -225,7 +225,7 @@ rule B2 [color=D2B4DE]:
 	let
 		license = <~id_Enclave, ~MRENCLAVE, ~MRSIGNER, ~id_IAS, sign(<~id_Enclave, ~MRENCLAVE, ~MRSIGNER>, ~priv_IAS), pk(~priv_IAS)>
 
-		m7 = <~ANonce, APublic, ~tid_Alice, ~tid_Boris>
+		m7 = <~ANonce, APublic>
 
 		report_key = sgx_get_key(<~MRENCLAVE, 'report', real(~id_CPU_2)>)
 
@@ -233,7 +233,7 @@ rule B2 [color=D2B4DE]:
 		// REVIEW Utilizo os nonces em vez de VK
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 		body = <$B, ~id_CPU_2, ~MRENCLAVE, data>
-		report = <body, CMAC(body, report_key), $B, $QE>
+		report = <body, CMAC(body, report_key)>
 
 		m8 = report
 	in
@@ -259,12 +259,11 @@ rule B3 [color=D2B4DE]:
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 		body = <$B, ~id_CPU_2, ~MRENCLAVE, data>
 		content = <body>
-		quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS), $QE, $B>
+		quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
 		m9 = quote
 		// TODO modificar quote e talvez remover este bloco, licença, etc.
 
-		BQuote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
-		m10 = <~BNonce, BPublic, BQuote, ~tid_Boris, ~tid_Alice>
+		m10 = <~BNonce, BPublic, quote>
 	in
 	[
 		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
@@ -274,7 +273,7 @@ rule B3 [color=D2B4DE]:
 	]--[
 		Progress_B3(~tid_Boris, ~tid_Alice, ~tid_CPU_2, $B, ~id_Enclave, ~id_CPU_2, m9, m10)
 	]->[
-		State_Enclave(~tid_Boris, 'TODO', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, BQuote, ~tid_Alice, ~ANonce, APublic>),
+		State_Enclave(~tid_Boris, 'TODO', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, quote, ~tid_Alice, ~ANonce, APublic>),
 		Out(m10)
 	]
 
@@ -282,13 +281,13 @@ rule A4 [color=D7BDE2]:
 	let
 		license = <~id_Enclave, ~MRENCLAVE, ~MRSIGNER, ~id_IAS, sign(<~id_Enclave, ~MRENCLAVE, ~MRSIGNER>, ~priv_IAS), pk(~priv_IAS)>
 
-		m10 = <~BNonce, BPublic, BQuote, ~tid_Boris, ~tid_Alice>
+		m10 = <~BNonce, BPublic, BQuote>
 
 		report_key = sgx_get_key(<~MRENCLAVE, 'report', real(~id_CPU_1)>)
 
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 		body = <$A, ~id_CPU_1, ~MRENCLAVE, data>
-		report = <body, CMAC(body, report_key), $A, $QE>
+		report = <body, CMAC(body, report_key)>
 
 		m11 = report
 	in
@@ -312,10 +311,9 @@ rule A5 [color=D7BDE2]:
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 		body = <$A, ~id_CPU_1, ~MRENCLAVE, data>
 		content = <body>
-		quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS), $QE, $A>
-		m12 = quote
+		quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
+		m12 = AQuote
 
-		AQuote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
 		m13a = AQuote
 		m13b = BQuote
 	in
@@ -352,7 +350,7 @@ rule A6 [color=D7BDE2]:
 		BReport = <BReport_content, sign(BReport_content, ~priv_IAS)>
 		m16b = BReport
 
-		m17 = <AReport, BReport, ~tid_Alice, ~tid_Boris>
+		m17 = <AReport, BReport>
 	in
 	[
 		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
@@ -388,13 +386,13 @@ rule B4 [color=D2B4DE]:
 		BReport_content = <BReport_body>
 		BReport = <BReport_content, sign(BReport_content, ~priv_IAS)>
 
-		m17 = <AReport, BReport, ~tid_Alice, ~tid_Boris>
+		m17 = <AReport, BReport>
 
 		KDK = APublic^~BPrivate
 		MK = CMAC('MK', KDK)
 		SK = CMAC('SK', KDK)
 
-		m18 = <'OK', ~tid_Boris, ~tid_Alice>
+		m18 = 'OK'
 	in
 	[
 		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
@@ -430,7 +428,7 @@ rule A7 [color=D7BDE2]:
 		BReport_content = <BReport_body>
 		BReport = <BReport_content, sign(BReport_content, ~priv_IAS)>
 
-		m18 = <'OK', ~tid_Boris, ~tid_Alice>
+		m18 = 'OK'
 
 		KDK = BPublic^~APrivate
 		MK = CMAC('MK', KDK)
@@ -468,9 +466,9 @@ let
 
 	// 5.15: Este body não devia interessar, desde que CMAC correto.
 	// 5.15: body = <$F, ~id_CPU, ~MRENCLAVE, data>
-	report = <body, CMAC(body, report_key), $F, $QE>
+	report = <body, CMAC(body, report_key)>
 	content = <body>
-	quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS), $QE, $F>
+	quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
 in
 [
 	!State_QE(~tid_QE, 'idle', <~id_QE, ~tid_CPU, ~id_CPU, ~id_IAS, ~priv_QE, sign(pk(~priv_QE), ~priv_IAS), pk(~priv_IAS)>),
