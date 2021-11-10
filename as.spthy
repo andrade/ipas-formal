@@ -328,6 +328,8 @@ rule A5 [color=D7BDE2]:
 		In(m12)
 	]--[
 		Progress_A5(~tid_Alice, ~tid_Boris, ~tid_CPU_1, $A, ~id_Enclave, ~id_CPU_1, m12, m13a, m13b)
+
+		, Reach_A5(~tid_Alice, ~tid_Boris, AQuote, BQuote) // TEMP exists-trace
 	]->[
 		State_Enclave(~tid_Alice, 'RA', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, AQuote, ~tid_Boris, ~BNonce, BPublic, BQuote>),
 		Out(m13a),
@@ -686,6 +688,10 @@ lemma session_keys: exists-trace
 			not(Ex #r. Leak_private_DH(B) @ r)
 		)
 	"
+
+// Perceber se A5 é alcançado. Comentar output de A5.
+lemma r5: exists-trace
+	"Ex A B AQuote BQuote #k. Reach_A5(A, B, AQuote, BQuote) @ #k"
 
 lemma session_keys_secrecy:
 	"not(
