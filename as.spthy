@@ -225,13 +225,13 @@ rule B2 [color=D2B4DE]:
 	let
 		license = <~id_Enclave, ~MRENCLAVE, ~MRSIGNER, ~id_IAS, sign(<~id_Enclave, ~MRENCLAVE, ~MRSIGNER>, ~priv_IAS), pk(~priv_IAS)>
 
-		m7 = <~ANonce, APublic>
+		m7 = <ANonce, APublic>
 
 		report_key = sgx_get_key(<~MRENCLAVE, 'report', real(~id_CPU_2)>)
 
 		// data = h(<APublic, BPublic, VK>)
 		// REVIEW Utilizo os nonces em vez de VK
-		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
+		data = h(<APublic, BPublic, ANonce, ~BNonce>)
 		body = <$B, ~id_CPU_2, ~MRENCLAVE, data>
 		report = <body, CMAC(body, report_key)>
 
@@ -248,7 +248,7 @@ rule B2 [color=D2B4DE]:
 	]--[
 		Progress_B2(~tid_Boris, ~tid_Alice, ~tid_CPU_2, $B, ~id_Enclave, ~id_CPU_2, m7, m8)
 	]->[
-		State_Enclave(~tid_Boris, 'LA', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, ~tid_Alice, ~ANonce, APublic>),
+		State_Enclave(~tid_Boris, 'LA', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, ~tid_Alice, ANonce, APublic>),
 		Out(m8)
 	]
 
