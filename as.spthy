@@ -531,6 +531,9 @@ restriction OnlyOnce:
 // lemma secrecy:
 // 	"All k #i #j. Secret(k) @i & K(k) @j ==> F"
 
+lemma setup: exists-trace
+	"Ex tid_Alice tid_Boris #k. Connected(tid_Alice, tid_Boris) @ #k"
+
 // E1 e E2 são o mesmo enclave mas a executar em processadores diferentes: E1 no CPU_1, e E2 e E3 no CPU_3.
 /*lemma Multi: exists-trace
 	"
