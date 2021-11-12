@@ -272,6 +272,8 @@ rule B3 [color=D2B4DE]:
 		In(m9)
 	]--[
 		Progress_B3(~tid_Boris, ~tid_Alice, ~tid_CPU_2, $B, ~id_Enclave, ~id_CPU_2, m9, m10)
+
+		, Reach_B3(~tid_Alice, ~tid_Boris, SMK)
 	]->[
 		State_Enclave(~tid_Boris, 'TODO', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, quote, ~tid_Alice, ~ANonce, APublic>),
 		Out(m10)
@@ -299,6 +301,8 @@ rule A4 [color=D7BDE2]:
 		In(m10)
 	]--[
 		Progress_A4(~tid_Alice, ~tid_Boris, ~tid_CPU_1, $A, ~id_Enclave, ~id_CPU_1, m10, m11)
+
+		, Reach_A4(~tid_Alice, ~tid_Boris, SMK) // TEMP exists-trace r4
 	]->[
 		State_Enclave(~tid_Alice, 'LA', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, ~tid_Boris, ~BNonce, BPublic, BQuote>),
 		Out(m11)
@@ -687,6 +691,9 @@ lemma session_keys: exists-trace
 			not(Ex #r. Leak_private_DH(B) @ r)
 		)
 	"
+
+lemma r4: exists-trace
+	"Ex tid_Alice tid_Boris SMK #k #j. Reach_A4(tid_Alice, tid_Boris, SMK) @ #k & Reach_B3(tid_Alice, tid_Boris, SMK) @ #j & j<k"
 
 // Perceber se A5 é alcançado. Comentar output de A5.
 lemma r5: exists-trace
