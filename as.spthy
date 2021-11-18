@@ -112,7 +112,7 @@ rule Binding:
 		Out(~tid_Enclave)
 	]
 
-rule Frank_1 [color=F5CBA7]:
+/*rule Frank_1 [color=F5CBA7]:
 let
 	license = <~id_Enclave, ~MRENCLAVE, ~MRSIGNER, ~id_IAS, sign(<~id_Enclave, ~MRENCLAVE, ~MRSIGNER>, ~priv_IAS), pk(~priv_IAS)>
 
@@ -174,7 +174,7 @@ in
 	Reach_F3(~tid_Enclave, ~tid_CPU, report),
 	Eq(true, verify(signature, content, pub_IAS))
 ]->[
-]
+]*/
 
 rule DH [color=F4D03F]:
 	[ Fr(~k) ]-->[ !DH_private($id, ~k), !DH_public($id, 'g'^~k), Out('g'^~k) ]
@@ -531,9 +531,23 @@ restriction OnlyOnce:
 // lemma secrecy:
 // 	"All k #i #j. Secret(k) @i & K(k) @j ==> F"
 
+// restriction r17:
+// 	"All A B m17 #i. B4_IN_m17(A, B, m17) @ i ==> (
+// 		// (Ex #j. K(m17) @ j & j < i) |
+// 		(Ex #j. A6_OUT_m17(A, B, m17) @ j)
+// 	)"
+
+// lemma s1 [sources]:
+// 	"All A B m17 #i. B4_IN_m17(A, B, m17) @ i ==> (
+// 		// (Ex #j. K(m17) @ j & j < i) |
+// 		(Ex #j. A6_OUT_m17(A, B, m17) @ j)
+// 	)"
+
+// lemma setup: exists-trace
+// 	"Ex tid_Alice tid_Boris #k. Connected(tid_Alice, tid_Boris) @ #k"
 
 // E1 e E2 são o mesmo enclave mas a executar em processadores diferentes: E1 no CPU_1, e E2 e E3 no CPU_3.
-lemma Multi: exists-trace
+/*lemma Multi: exists-trace
 	"
 	Ex
 		id_CPU_1 tid_CPU_1 MRENCLAVE_1 MRSIGNER_1 id_QE_1 tid_QE_1
@@ -626,7 +640,7 @@ lemma Frank: exists-trace
 	"
 
 lemma F3: exists-trace
-	"Ex tid_Enclave tid_CPU R #i. Reach_F3(tid_Enclave, tid_CPU, R) @ #i"
+	"Ex tid_Enclave tid_CPU R #i. Reach_F3(tid_Enclave, tid_CPU, R) @ #i"*/
 
 // WIP: Alice and Boris
 /*lemma temp_one: exists-trace
