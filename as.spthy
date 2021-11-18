@@ -709,8 +709,14 @@ lemma session_keys: exists-trace
 		)
 	"
 
-lemma r4: exists-trace
-	"Ex tid_Alice tid_Boris SMK #k #j. Reach_A4(tid_Alice, tid_Boris, SMK) @ #k & Reach_B3(tid_Alice, tid_Boris, SMK) @ #j & j<k"
+// Partial trace: derivation key setup correctly between A and B
+lemma A4: exists-trace
+	"
+		Ex tid_Alice tid_Boris KDK #j #k.
+		Reach_B3(tid_Alice, tid_Boris, KDK) @ #j &
+		Reach_A4(tid_Alice, tid_Boris, KDK) @ #k &
+		#j < #k
+	"
 
 // Perceber se A5 é alcançado. Comentar output de A5.
 lemma r5: exists-trace
