@@ -33,6 +33,9 @@ rule Create_IAS:
 		Out(pk(~priv_IAS))
 	]
 
+// rule Reveal_IAS:
+// 	[ !Keys_IAS(id_IAS, k) ]--[ Reveal_IAS(id_IAS) ]->[ Out(k) ]
+
 rule Create_QE:
 	[ Fr(~id_QE) ]--[ Create_QE(~id_QE) ]->[ ID_QE(~id_QE), Out(~id_QE) ]
 
