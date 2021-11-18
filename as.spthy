@@ -27,10 +27,10 @@ rule Create_IAS:
 		OnlyOnce(),
 		Create_IAS(~id_IAS)
 	]->[
-		// !ID_IAS(~id_IAS),
+		!ID_IAS(~id_IAS),
 		!Keys_IAS(~id_IAS, ~priv_IAS), // root keys, we use single key pair
 		Out(~id_IAS),
-		Out(pk(~priv_IAS))
+		Out(pk(~priv_IAS))             // give public key to the adversary
 	]
 
 // rule Reveal_IAS:
@@ -47,8 +47,8 @@ rule Create_Enclave:
 	]--[
 		Create_Enclave(~id_Enclave, ~MRENCLAVE, ~MRSIGNER)
 	]->[
-		ID_Enclave(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
-		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
+		ID_Enclave(~id_Enclave),
+		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
 		Out(~id_Enclave),
 		Out(~MRENCLAVE),
 		Out(~MRSIGNER)
@@ -67,12 +67,12 @@ rule Create_CPU:
 // Provision CPU and QE: essentially registers these two agents with Intel
 rule Provisioning:
 	[
-		// !ID_IAS(~id_IAS),
+		!ID_IAS(~id_IAS),
 		!Keys_IAS(~id_IAS, ~priv_IAS),
 		ID_QE(~id_QE),
 		ID_CPU(~id_CPU),
 		Fr(~tid_QE),
-		Fr(~priv_QE), // attestation key for QE, uses to sign quotes
+		Fr(~priv_QE), // attestation key for QE, signs quotes
 		Fr(~tid_CPU)
 	]--[
 		Provision(~id_QE, ~id_CPU, ~id_IAS, ~tid_QE, ~tid_CPU)
@@ -84,6 +84,7 @@ rule Provisioning:
 		Out(~tid_CPU)
 	]
 
+// TODO Alterar whitelist de acordo com código
 // Whitelist enclave
 rule Licensing:
 	let
@@ -91,10 +92,10 @@ rule Licensing:
 		license = <~id_Enclave, ~MRENCLAVE, ~MRSIGNER, ~id_IAS, sign(<~id_Enclave, ~MRENCLAVE, ~MRSIGNER>, ~priv_IAS), pk(~priv_IAS)>
 	in
 	[
-		// !ID_IAS(~id_IAS),
+		!ID_IAS(~id_IAS),
 		!Keys_IAS(~id_IAS, ~priv_IAS),
-		ID_Enclave(~id_Enclave, ~MRENCLAVE, ~MRSIGNER)
-		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER)
+		ID_Enclave(~id_Enclave),
+		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER)
 	]--[
 		Licensing(~id_Enclave, ~id_IAS)
 	]->[
@@ -102,6 +103,7 @@ rule Licensing:
 		Out(license)
 	]
 
+// TODO alteração para instance, TBC
 // Bind enclave to CPU: results in instance of this enclave running on this CPU
 rule Binding:
 	[
@@ -114,7 +116,7 @@ rule Binding:
 	]--[
 		Binding(~tid_Enclave, ~id_Enclave, ~id_CPU, ~tid_CPU)
 	]->[
-		State_Enclave_init(~tid_Enclave, 'bound', <~id_Enclave, license, ~tid_CPU, ~id_CPU>),
+		State_Enclave(~tid_Enclave, 'bound', <~id_Enclave, license, ~tid_CPU, ~id_CPU>),
 		Out(~tid_Enclave)
 	]
 
@@ -131,7 +133,7 @@ let
 	so = <~hF>
 in
 [
-	State_Enclave_init(~tid_Enclave, 'bound', <~id_Enclave, license, ~tid_CPU, ~id_CPU>),
+	State_Enclave(~tid_Enclave, 'bound', <~id_Enclave, license, ~tid_CPU, ~id_CPU>),
 	Fr(~hF)
 ]--[
 	Progress_F1(~tid_Enclave, ~tid_CPU, $F, ~hF, report)
@@ -197,10 +199,11 @@ rule Reveal_DH:
 // rule Reveal_ltk:
 // 	[ !Ltk(id, ltk) ]--[ Reveal(id) ]->[ Out(ltk) ]
 
+// Establish a communication channel between A and B by associated Thread IDs
 rule Connect:
 	[
-		State_Enclave_init(~tid_E1, 'bound', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1>),
-		State_Enclave_init(~tid_E2, 'bound', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2>)
+		State_Enclave(~tid_E1, 'bound', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1>),
+		State_Enclave(~tid_E2, 'bound', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2>)
 	]--[
 		Connected(~tid_E1, ~tid_E2)
 	]->[
@@ -221,6 +224,8 @@ rule A1 [color=D7BDE2]:
 		!DH_public($A, APublic)
 	]--[
 		Progress_A1(~tid_Alice, ~tid_CPU_1, $A, ~id_Enclave, ~id_CPU_1, m7)
+
+		// , Eq('g'^~APrivate, APublic) // TODO remove, dummy test
 	]->[
 		State_Enclave(~tid_Alice, 'TODO', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, ~tid_Boris>),
 		Out(m7)
@@ -230,13 +235,13 @@ rule B2 [color=D2B4DE]:
 	let
 		license = <~id_Enclave, ~MRENCLAVE, ~MRSIGNER, ~id_IAS, sign(<~id_Enclave, ~MRENCLAVE, ~MRSIGNER>, ~priv_IAS), pk(~priv_IAS)>
 
-		m7 = <ANonce, APublic>
+		m7 = <~ANonce, APublic>
 
 		report_key = sgx_get_key(<~MRENCLAVE, 'report', real(~id_CPU_2)>)
 
 		// data = h(<APublic, BPublic, VK>)
 		// REVIEW Utilizo os nonces em vez de VK
-		data = h(<APublic, BPublic, ANonce, ~BNonce>)
+		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 		body = <$B, ~id_CPU_2, ~MRENCLAVE, data>
 		report = <body, CMAC(body, report_key)>
 
@@ -253,13 +258,14 @@ rule B2 [color=D2B4DE]:
 	]--[
 		Progress_B2(~tid_Boris, ~tid_Alice, ~tid_CPU_2, $B, ~id_Enclave, ~id_CPU_2, m7, m8)
 	]->[
-		State_Enclave(~tid_Boris, 'LA', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, ~tid_Alice, ANonce, APublic>),
+		State_Enclave(~tid_Boris, 'LA', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, ~tid_Alice, ~ANonce, APublic>),
 		Out(m8)
+		, Out(~BNonce) // NOTE dar BNonce ao adversário
 	]
 
 rule B3 [color=D2B4DE]:
 	let
-		license = <~id_Enclave, ~MRENCLAVE, ~MRSIGNER, ~id_IAS, sign(<~id_Enclave, ~MRENCLAVE, ~MRSIGNER>, ~priv_IAS), pk(~priv_IAS)>
+		license = <~id_Enclave, ~MRENCLAVE, ~MRSIGNER, ~id_IAS, sign(<~id_Enclave, ~MRENCLAVE, ~MRSIGNER>, ~priv_IAS), pub_IAS>
 
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 		body = <$B, ~id_CPU_2, ~MRENCLAVE, data>
@@ -268,7 +274,12 @@ rule B3 [color=D2B4DE]:
 		m9 = quote
 		// TODO modificar quote e talvez remover este bloco, licença, etc.
 
-		m10 = <~BNonce, BPublic, quote>
+		KDK = APublic^~BPrivate
+		SMK = CMAC('SMK', KDK)
+
+		x = <~BNonce, BPublic, quote>
+		m10 = <x, CMAC(x, SMK)>
+		// m10 = <~BNonce, BPublic, quote>
 	in
 	[
 		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
@@ -278,9 +289,11 @@ rule B3 [color=D2B4DE]:
 	]--[
 		Progress_B3(~tid_Boris, ~tid_Alice, ~tid_CPU_2, $B, ~id_Enclave, ~id_CPU_2, m9, m10)
 
-		, Reach_B3(~tid_Alice, ~tid_Boris, SMK)
+		, Eq(verify(sign(pk(~priv_QE), ~priv_IAS), pk(~priv_QE), pub_IAS), true)
+
+		, Reach_B3(~tid_Alice, ~tid_Boris, KDK) // FIXME need progress or not?
 	]->[
-		State_Enclave(~tid_Boris, 'TODO', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, quote, ~tid_Alice, ~ANonce, APublic>),
+		State_Enclave(~tid_Boris, 'TODO', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, quote, KDK, SMK, ~tid_Alice, ~ANonce, APublic>),
 		Out(m10)
 	]
 
@@ -288,7 +301,12 @@ rule A4 [color=D7BDE2]:
 	let
 		license = <~id_Enclave, ~MRENCLAVE, ~MRSIGNER, ~id_IAS, sign(<~id_Enclave, ~MRENCLAVE, ~MRSIGNER>, ~priv_IAS), pk(~priv_IAS)>
 
-		m10 = <~BNonce, BPublic, BQuote>
+		KDK = BPublic^~APrivate
+		SMK = CMAC('SMK', KDK)
+
+		x = <~BNonce, BPublic, BQuote>
+		m10 = <x, CMAC(x, SMK)>
+		// m10 = <~BNonce, BPublic, BQuote>
 
 		report_key = sgx_get_key(<~MRENCLAVE, 'report', real(~id_CPU_1)>)
 
@@ -307,9 +325,9 @@ rule A4 [color=D7BDE2]:
 	]--[
 		Progress_A4(~tid_Alice, ~tid_Boris, ~tid_CPU_1, $A, ~id_Enclave, ~id_CPU_1, m10, m11)
 
-		, Reach_A4(~tid_Alice, ~tid_Boris, SMK) // TEMP exists-trace r4
+		, Reach_A4(~tid_Alice, ~tid_Boris, KDK) // TEMP exists-trace r4
 	]->[
-		State_Enclave(~tid_Alice, 'LA', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, ~tid_Boris, ~BNonce, BPublic, BQuote>),
+		State_Enclave(~tid_Alice, 'LA', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, KDK, SMK, ~tid_Boris, ~BNonce, BPublic, BQuote>),
 		Out(m11)
 	]
 
@@ -329,7 +347,7 @@ rule A5 [color=D7BDE2]:
 	[
 		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
 		// !License(~id_Enclave, license),
-		State_Enclave(~tid_Alice, 'LA', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, ~tid_Boris, ~BNonce, BPublic, BQuote>),
+		State_Enclave(~tid_Alice, 'LA', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, KDK, SMK, ~tid_Boris, ~BNonce, BPublic, BQuote>),
 		// !DH_public($A, APublic),
 		// !DH_public($B, BPublic),
 		In(m12)
@@ -338,7 +356,8 @@ rule A5 [color=D7BDE2]:
 
 		, Reach_A5(~tid_Alice, ~tid_Boris, AQuote, BQuote) // TEMP exists-trace
 	]->[
-		State_Enclave(~tid_Alice, 'RA', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, AQuote, ~tid_Boris, ~BNonce, BPublic, BQuote>),
+		// TEMP comentar output para testar r5
+		State_Enclave(~tid_Alice, 'RA', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, AQuote, KDK, SMK, ~tid_Boris, ~BNonce, BPublic, BQuote>),
 		Out(m13a),
 		Out(m13b)
 	]
@@ -359,12 +378,14 @@ rule A6 [color=D7BDE2]:
 		BReport = <BReport_content, sign(BReport_content, ~priv_IAS)>
 		m16b = BReport
 
-		m17 = <AReport, BReport>
+		x = <AReport, BReport>
+		m17 = <x, CMAC(x, SMK)>
+		// m17 = <AReport, BReport>
 	in
 	[
 		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
 		// !License(~id_Enclave, license),
-		State_Enclave(~tid_Alice, 'RA', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, AQuote, ~tid_Boris, ~BNonce, BPublic, BQuote>),
+		State_Enclave(~tid_Alice, 'RA', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, AQuote, KDK, SMK, ~tid_Boris, ~BNonce, BPublic, BQuote>),
 		// !DH_public($A, APublic),
 		// !DH_public($B, BPublic),
 		In(m16a),
@@ -372,11 +393,16 @@ rule A6 [color=D7BDE2]:
 	]--[
 		Progress_A6(~tid_Alice, ~tid_Boris, ~tid_CPU_1, $A, ~id_Enclave, ~id_CPU_1, m16a, m16b, m17),
 
+		Reach_A6(~tid_Alice, ~tid_Boris, AReport, BReport, data),
+
+		// A6_OUT_m17($A, $B, m17),
+
 		Eq(true, verify(sign(AReport_content, ~priv_IAS), AReport_content, pub_IAS)),
 
 		Eq(true, verify(sign(BReport_content, ~priv_IAS), BReport_content, pub_IAS))
 	]->[
-		State_Enclave(~tid_Alice, 'installing', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, AQuote, ~tid_Boris, ~BNonce, BPublic, BQuote, AReport, BReport>),
+		// TEMP comentar output para testar r6
+		State_Enclave(~tid_Alice, 'installing', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, AQuote, KDK, SMK, ~tid_Boris, ~BNonce, BPublic, BQuote, AReport, BReport>),
 		Out(m17)
 	]
 
@@ -395,24 +421,29 @@ rule B4 [color=D2B4DE]:
 		BReport_content = <BReport_body>
 		BReport = <BReport_content, sign(BReport_content, ~priv_IAS)>
 
-		m17 = <AReport, BReport>
+		x = <AReport, BReport>
+		m17 = <x, CMAC(x, SMK)>
+		// m17 = <AReport, BReport>
 
-		KDK = APublic^~BPrivate
+		// KDK = APublic^~BPrivate
 		MK = CMAC('MK', KDK)
 		SK = CMAC('SK', KDK)
 
-		m18 = 'OK'
+		m18 = CMAC('OK', SMK)
+		// m18 = 'OK'
 	in
 	[
 		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
 		// !License(~id_Enclave, license),
-		State_Enclave(~tid_Boris, 'TODO', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, BQuote, ~tid_Alice, ~ANonce, APublic>),
+		State_Enclave(~tid_Boris, 'TODO', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, BQuote, KDK, SMK, ~tid_Alice, ~ANonce, APublic>),
 		// !DH_public($A, APublic),
 		// !DH_public($B, BPublic),
 		In(m17)
 	]--[
 		SessionKeys($A, $B, MK, SK),
 		Progress_B4(~tid_Boris, ~tid_Alice, ~tid_CPU_2, $B, ~id_Enclave, ~id_CPU_2, m17, m18, MK, SK, ~BPrivate),
+
+		// B4_IN_m17($A, $B, m17),
 
 		Eq(true, verify(sign(AReport_content, ~priv_IAS), AReport_content, pub_IAS)),
 
@@ -437,16 +468,17 @@ rule A7 [color=D7BDE2]:
 		BReport_content = <BReport_body>
 		BReport = <BReport_content, sign(BReport_content, ~priv_IAS)>
 
-		m18 = 'OK'
+		m18 = CMAC('OK', SMK)
+		// m18 = 'OK'
 
-		KDK = BPublic^~APrivate
+		// KDK = BPublic^~APrivate
 		MK = CMAC('MK', KDK)
 		SK = CMAC('SK', KDK)
 	in
 	[
 		// !Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
 		// !License(~id_Enclave, license),
-		State_Enclave(~tid_Alice, 'installing', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, AQuote, ~tid_Boris, ~BNonce, BPublic, BQuote, AReport, BReport>),
+		State_Enclave(~tid_Alice, 'installing', <~id_Enclave, license, ~tid_CPU_1, ~id_CPU_1, $A, ~ANonce, ~APrivate, APublic, AQuote, KDK, SMK, ~tid_Boris, ~BNonce, BPublic, BQuote, AReport, BReport>),
 		// !DH_public($A, APublic),
 		// !DH_public($B, BPublic),
 		In(m18)
@@ -475,12 +507,21 @@ let
 
 	// 5.15: Este body não devia interessar, desde que CMAC correto.
 	// 5.15: body = <$F, ~id_CPU, ~MRENCLAVE, data>
-	body = <$i, ~id_CPU, ~MRENCLAVE, data>
+	// 11.10: body = <$i, ~id_CPU, ~MRENCLAVE, data>
+	// 11.12: body = <id_Instance, ~id_CPU, ~MRENCLAVE, data>
+	// 11.12: report = <body, CMAC(body, report_key)>
+
+	// body = <$i, ~id_CPU, ~MRENCLAVE, data>
+	// body = <id_Instance, ~id_CPU, ~MRENCLAVE, data>
+	data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
+	body = <$B, ~id_CPU, ~MRENCLAVE, data>
 	report = <body, CMAC(body, report_key)>
 	content = <body>
 	quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
 in
 [
+	// REVIEW Mudar para state em vez de 'idle' para aceitar ambos os casos ??
+	// NOTE sendo estado linear temos apenas um QE por binding, TBC
 	!State_QE(~tid_QE, 'idle', <~id_QE, ~tid_CPU, ~id_CPU, ~id_IAS, ~priv_QE, sign(pk(~priv_QE), ~priv_IAS), pk(~priv_IAS)>),
 	In(report)
 ]--[
@@ -715,6 +756,40 @@ lemma session_keys: exists-trace
 		)
 	"
 
+
+// To remove
+lemma session_keys_wrong: exists-trace
+	"Ex A B MK SK #k. SessionKeys(A, B, MK, SK) @ k"
+
+lemma b2: exists-trace
+	"Ex tid_Alice tid_Boris A B E tid_CPU_1 tid_CPU_2 id_CPU_1 id_CPU_2 m7 m8 #i #j.
+
+	Progress_A1(tid_Alice, tid_CPU_1, A, E, id_CPU_1, m7)@i &
+
+	Progress_B2(tid_Boris, tid_Alice, tid_CPU_2, B, E, id_CPU_2, m7, m8)@j &
+
+	i<j"
+
+lemma r3: exists-trace
+	"Ex tid_Alice tid_Boris A B E tid_CPU_1 tid_CPU_2 id_CPU_1 id_CPU_2 tid_QE m7 R Q m10 #i #j #k #l.
+
+	Progress_A1(tid_Alice, tid_CPU_1, A, E, id_CPU_1, m7)@i &
+
+	Progress_B2(tid_Boris, tid_Alice, tid_CPU_2, B, E, id_CPU_2, m7, R)@j &
+
+	Progress_QE(tid_QE, tid_CPU_2, R, Q)@ k &
+
+	Progress_B3(tid_Boris, tid_Alice, tid_CPU_2, B, E, id_CPU_2, Q, m10)@l &
+
+	i<j & j < k"
+
+lemma Reach_QE: exists-trace
+	"Ex tid_QE tid_CPU R Q #i. Progress_QE(tid_QE, tid_CPU, R, Q) @ #i"
+
+lemma b3: exists-trace
+	"Ex tid_Alice tid_Boris B E tid_QE tid_CPU id_CPU R Q m10 #i #j. Progress_QE(tid_QE, tid_CPU, R, Q) @ i & Progress_B3(tid_Boris, tid_Alice, tid_CPU, B, E, id_CPU, Q, m10) @ j & i<j"
+
+
 // Partial trace: derivation key setup correctly between A and B
 lemma A4: exists-trace
 	"
@@ -727,6 +802,12 @@ lemma A4: exists-trace
 // Perceber se A5 é alcançado. Comentar output de A5.
 lemma r5: exists-trace
 	"Ex A B AQuote BQuote #k. Reach_A5(A, B, AQuote, BQuote) @ #k"
+
+lemma r5c: exists-trace
+	"Ex A B AQuote BQuote #j #k. Connected(A, B) @ j & Reach_A5(A, B, AQuote, BQuote) @ #k"
+
+lemma r6: exists-trace
+	"Ex A B AReport BReport d #j #k. Connected(A, B) @ j & Reach_A6(A, B, AReport, BReport, d) @ #k"
 
 lemma session_keys_secrecy:
 	"not(
@@ -757,5 +838,7 @@ lemma honest_keys: exists-trace
 
 	t1 < t2
 	"
+
+// TODO Lots of leftovers from tests, needs cleanup
 
 end
