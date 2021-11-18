@@ -16,6 +16,9 @@ functions:
 	real/1 [private],
 	sgx_get_key/1
 
+// functions: enmac/2, demac/3
+// equations: demac(enmac(m, k), m, k) = true
+
 rule Create_IAS:
 	[
 		Fr(~id_IAS),
