@@ -43,6 +43,7 @@ rule Create_Enclave:
 		Fr(~MRENCLAVE),
 		Fr(~MRSIGNER)
 	]--[
+		OnlyOneEnclave(), // TEMP restringir
 		Create_Enclave(~id_Enclave, ~MRENCLAVE, ~MRSIGNER)
 	]->[
 		ID_Enclave(~id_Enclave),
@@ -488,6 +489,9 @@ restriction Equality:
 
 restriction OnlyOnce:
 	"All #i #j. OnlyOnce() @#i & OnlyOnce() @#j ==> #i = #j"
+
+restriction OnlyOneEnclave:
+	"All #i #j. OnlyOneEnclave() @#i & OnlyOneEnclave() @#j ==> #i = #j"
 
 // lemma secrecy:
 // 	"All k #i #j. Secret(k) @i & K(k) @j ==> F"
