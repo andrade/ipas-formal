@@ -455,7 +455,7 @@ in
 
 rule IAS [color=DADADA]:
 let
-	body = <$F, ~id_CPU, ~MRENCLAVE, data>
+	// body = <$F, ~id_CPU, ~MRENCLAVE, data> // TEMP ñ é necessário
 	content = <body>
 	quote = <content, sign(content, ~priv_IAS)>
 
