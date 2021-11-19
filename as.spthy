@@ -67,12 +67,13 @@ rule Provisioning:
 		ID_QE(~id_QE),
 		ID_CPU(~id_CPU),
 		Fr(~tid_QE),
-		Fr(~priv_QE), // attestation key for QE, signs quotes
+		// Fr(~priv_QE), // attestation key for QE, signs quotes
 		Fr(~tid_CPU)
 	]--[
 		Provision(~id_QE, ~id_CPU, ~id_IAS, ~tid_QE, ~tid_CPU)
 	]->[
-		!State_QE(~tid_QE, 'idle', <~id_QE, ~tid_CPU, ~id_CPU, ~id_IAS, ~priv_QE, sign(pk(~priv_QE), ~priv_IAS), pk(~priv_IAS)>),
+		// !State_QE(~tid_QE, 'idle', <~id_QE, ~tid_CPU, ~id_CPU, ~id_IAS, ~priv_QE, sign(pk(~priv_QE), ~priv_IAS), pk(~priv_IAS)>),
+		!State_QE(~tid_QE, 'idle', <~id_QE, ~tid_CPU, ~id_CPU, ~id_IAS, ~priv_IAS>),
 		!State_CPU(~tid_CPU, 'Provisioning_CPU', <~id_CPU, ~tid_QE, ~id_QE, ~id_IAS, sign(~id_CPU, ~priv_IAS), pk(~priv_IAS)>)
 	]
 
@@ -186,7 +187,7 @@ rule B3 [color=D2B4DE]:
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 		body = <$B, ~id_CPU_2, ~MRENCLAVE, data>
 		content = <body>
-		quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
+		quote = <content, sign(content, ~priv_IAS)>
 		m9 = quote
 		// TODO modificar quote e talvez remover este bloco, licença, etc.
 
@@ -205,7 +206,9 @@ rule B3 [color=D2B4DE]:
 	]--[
 		Progress_B3(~tid_Boris, ~tid_Alice, ~tid_CPU_2, $B, ~id_Enclave, ~id_CPU_2, m9, m10)
 
-		, Eq(verify(sign(pk(~priv_QE), ~priv_IAS), pk(~priv_QE), pub_IAS), true)
+		// FIXME chave agora IAS e não QE
+		// , Eq(verify(sign(pk(~priv_QE), ~priv_IAS), pk(~priv_QE), pub_IAS), true)
+		, Eq(verify(sign(content, ~priv_IAS), content, pub_IAS), true)
 
 		, Reach_B3(~tid_Alice, ~tid_Boris, KDK) // FIXME need progress or not?
 	]->[
@@ -254,7 +257,7 @@ rule A5 [color=D7BDE2]:
 		data = h(<APublic, BPublic, ~ANonce, ~BNonce>)
 		body = <$A, ~id_CPU_1, ~MRENCLAVE, data>
 		content = <body>
-		quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
+		quote = <content, sign(content, ~priv_IAS)>
 		m12 = AQuote
 
 		m13a = AQuote
@@ -269,6 +272,8 @@ rule A5 [color=D7BDE2]:
 		In(m12)
 	]--[
 		Progress_A5(~tid_Alice, ~tid_Boris, ~tid_CPU_1, $A, ~id_Enclave, ~id_CPU_1, m12, m13a, m13b)
+
+		, Eq(verify(sign(content, ~priv_IAS), content, pk(~priv_IAS)), true)
 
 		, Reach_A5(~tid_Alice, ~tid_Boris, AQuote, BQuote) // TEMP exists-trace
 	]->[
@@ -433,12 +438,13 @@ let
 	body = <$B, ~id_CPU, ~MRENCLAVE, data>
 	report = <body, CMAC(body, report_key)>
 	content = <body>
-	quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
+	// quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
+	quote = <content, sign(content, ~priv_IAS)>
 in
 [
 	// REVIEW Mudar para state em vez de 'idle' para aceitar ambos os casos ??
 	// NOTE sendo estado linear temos apenas um QE por binding, TBC
-	!State_QE(~tid_QE, 'idle', <~id_QE, ~tid_CPU, ~id_CPU, ~id_IAS, ~priv_QE, sign(pk(~priv_QE), ~priv_IAS), pk(~priv_IAS)>),
+	!State_QE(~tid_QE, 'idle', <~id_QE, ~tid_CPU, ~id_CPU, ~id_IAS, ~priv_IAS>),
 	In(report)
 ]--[
 	Progress_QE(~tid_QE, ~tid_CPU, report, quote)
@@ -451,7 +457,7 @@ rule IAS [color=DADADA]:
 let
 	body = <$F, ~id_CPU, ~MRENCLAVE, data>
 	content = <body>
-	quote = <content, sign(content, ~priv_QE), pk(~priv_QE), sign(pk(~priv_QE), ~priv_IAS)>
+	quote = <content, sign(content, ~priv_IAS)>
 
 	report = <content, sign(content, ~priv_IAS)>
 in
@@ -460,13 +466,15 @@ in
 	!Keys_IAS(~id_IAS, ~priv_IAS),
 	In(quote)
 ]--[
-	Progress_IAS(~id_IAS, quote, report),
+	Progress_IAS(~id_IAS, quote, report)//,
 
+	// FIXME chave agora IAS e não QE
 	// verify IAS signature over public key of QE
-	Eq(true, verify(sign(pk(~priv_QE), ~priv_IAS), pk(~priv_QE), pk(~priv_IAS))),
+	// Eq(true, verify(sign(pk(~priv_QE), ~priv_IAS), pk(~priv_QE), pk(~priv_IAS))),
 
+	// FIXME chave agora IAS e não QE
 	// verify QE signature over contents of quote
-	Eq(true, verify(sign(content, ~priv_QE), content, pk(~priv_QE)))
+	// Eq(true, verify(sign(content, ~priv_QE), content, pk(~priv_QE)))
 ]->[
 	Out(report)
 ]
