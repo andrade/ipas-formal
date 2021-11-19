@@ -28,16 +28,14 @@ rule Create_IAS:
 		Create_IAS(~id_IAS)
 	]->[
 		!ID_IAS(~id_IAS),
-		!Keys_IAS(~id_IAS, ~priv_IAS), // root keys, we use single key pair
-		Out(~id_IAS),
-		Out(pk(~priv_IAS))             // give public key to the adversary
+		!Keys_IAS(~id_IAS, ~priv_IAS)
 	]
 
 // rule Reveal_IAS:
 // 	[ !Keys_IAS(id_IAS, k) ]--[ Reveal_IAS(id_IAS) ]->[ Out(k) ]
 
 rule Create_QE:
-	[ Fr(~id_QE) ]--[ Create_QE(~id_QE) ]->[ ID_QE(~id_QE), Out(~id_QE) ]
+	[ Fr(~id_QE) ]--[ Create_QE(~id_QE) ]->[ ID_QE(~id_QE) ]
 
 rule Create_Enclave:
 	[
@@ -48,10 +46,7 @@ rule Create_Enclave:
 		Create_Enclave(~id_Enclave, ~MRENCLAVE, ~MRSIGNER)
 	]->[
 		ID_Enclave(~id_Enclave),
-		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
-		Out(~id_Enclave),
-		Out(~MRENCLAVE),
-		Out(~MRSIGNER)
+		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER)
 	]
 
 rule Create_CPU:
@@ -60,8 +55,7 @@ rule Create_CPU:
 	]--[
 		Create_CPU(~id_CPU)
 	]->[
-		ID_CPU(~id_CPU),
-		Out(~id_CPU)
+		ID_CPU(~id_CPU)
 	]
 
 // Provision CPU and QE: essentially registers these two agents with Intel
@@ -78,10 +72,7 @@ rule Provisioning:
 		Provision(~id_QE, ~id_CPU, ~id_IAS, ~tid_QE, ~tid_CPU)
 	]->[
 		!State_QE(~tid_QE, 'idle', <~id_QE, ~tid_CPU, ~id_CPU, ~id_IAS, ~priv_QE, sign(pk(~priv_QE), ~priv_IAS), pk(~priv_IAS)>),
-		!State_CPU(~tid_CPU, 'Provisioning_CPU', <~id_CPU, ~tid_QE, ~id_QE, ~id_IAS, sign(~id_CPU, ~priv_IAS), pk(~priv_IAS)>),
-		Out(pk(~priv_QE)),
-		Out(~tid_QE),
-		Out(~tid_CPU)
+		!State_CPU(~tid_CPU, 'Provisioning_CPU', <~id_CPU, ~tid_QE, ~id_QE, ~id_IAS, sign(~id_CPU, ~priv_IAS), pk(~priv_IAS)>)
 	]
 
 // TODO Alterar whitelist de acordo com código
@@ -99,8 +90,7 @@ rule Licensing:
 	]--[
 		Licensing(~id_Enclave, ~id_IAS)
 	]->[
-		!License(~id_Enclave, license),
-		Out(license)
+		!License(~id_Enclave, license)
 	]
 
 // TODO alteração para instance, TBC
@@ -116,8 +106,7 @@ rule Binding:
 	]--[
 		Binding(~tid_Enclave, ~id_Enclave, ~id_CPU, ~tid_CPU)
 	]->[
-		State_Enclave(~tid_Enclave, 'bound', <~id_Enclave, license, ~tid_CPU, ~id_CPU>),
-		Out(~tid_Enclave)
+		State_Enclave(~tid_Enclave, 'bound', <~id_Enclave, license, ~tid_CPU, ~id_CPU>)
 	]
 
 rule DH [color=F4D03F]:
@@ -187,7 +176,6 @@ rule B2 [color=D2B4DE]:
 	]->[
 		State_Enclave(~tid_Boris, 'LA', <~id_Enclave, license, ~tid_CPU_2, ~id_CPU_2, $B, ~BNonce, ~BPrivate, BPublic, ~tid_Alice, ~ANonce, APublic>),
 		Out(m8)
-		, Out(~BNonce) // NOTE dar BNonce ao adversário
 	]
 
 rule B3 [color=D2B4DE]:
