@@ -31,8 +31,8 @@ rule Create_IAS:
 		!Keys_IAS(~id_IAS, ~priv_IAS)
 	]
 
-// rule Reveal_IAS:
-// 	[ !Keys_IAS(id_IAS, k) ]--[ Reveal_IAS(id_IAS) ]->[ Out(k) ]
+rule Reveal_IAS:
+	[ !Keys_IAS(id_IAS, k) ]--[ Reveal_IAS() ]->[ Out(k) ]
 
 rule Create_QE:
 	[ Fr(~id_QE) ]--[ Create_QE(~id_QE) ]->[ ID_QE(~id_QE) ]
@@ -584,7 +584,8 @@ lemma session_keys: exists-trace
 		(Ex A B MK SK #k.
 			SessionKeys(A, B, MK, SK) @ k &
 			not(Ex #r. Leak_private_DH(A) @ r) &
-			not(Ex #r. Leak_private_DH(B) @ r)
+			not(Ex #r. Leak_private_DH(B) @ r) &
+			not(Ex #r. Reveal_IAS() @ r)
 		)
 	"
 
