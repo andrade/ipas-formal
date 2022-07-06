@@ -5,9 +5,13 @@ builtins: symmetric-encryption
 
 functions: shared_key/1 [private], sealing_key/1 [private], MAC/2
 
-rule Client_1:
+////////////////////////////////////////////////////////////////////////
+//////////////////////////////  Sealing  //////////////////////////////
+////////////////////////////////////////////////////////////////////////
+
+rule Client_1_S:
 	let
-		sk = shared_key($sk)
+		sk = shared_key($sk1)
 	in
 	[
 		Fr(~k),
@@ -18,41 +22,111 @@ rule Client_1:
 		Out(senc(<~k, ~nonce>, sk))
 	]
 
-rule Client_2:
+rule Client_2_S:
 	let
-		mk = shared_key($mk)
+		mk = shared_key($mk1)
 	in
 	[
 		AState($A, ~k, ~nonce),
 		In(<sealed_data, mac>)
 	]--[
 		Eq(mac, MAC(<sealed_data, ~nonce>, mk)),
-		Done(),
-		Secret(~k)
+		Done1(),
+		Secret(~k),
+		Eq($A, $B)
 	]->[
+		Out(sealed_data) // send to network instead of saving to disk
 	]
 
-rule Server:
+rule Server_S:
 	let
-		sk = shared_key($sk)
-		mk = shared_key($mk)
+		sk = shared_key($sk1)
+		mk = shared_key($mk1)
 		self_key = sealing_key($server)
+		sealed_data = senc(<$server, ~k>, self_key)
 	in
 	[
 		In(senc(<~k, ~nonce>, sk))
 	]--[
 		Secret(~k)
 	]->[
-		Out(<senc(~k, self_key), MAC(<senc(~k, self_key), ~nonce>, mk)>)
+		Out(<sealed_data, MAC(<sealed_data, ~nonce>, mk)>)
 	]
+
+////////////////////////////////////////////////////////////////////////
+/////////////////////////////  Unsealing  /////////////////////////////
+////////////////////////////////////////////////////////////////////////
+
+rule Client_1_U:
+	let
+		mk = shared_key($mk2)
+	in
+	[
+		In(sealed_data), // receive from network instead of loading from disk
+		// Fr(~sealed_data),
+		Fr(~nonce)
+	]--[
+	]->[
+		BState($B, ~nonce),
+		Out(<sealed_data, ~nonce, MAC(<sealed_data, ~nonce>, mk)>)
+	]
+
+rule Client_2_U:
+	let
+		sk = shared_key($sk2)
+	in
+	[
+		BState($B, ~nonce),
+		// In(<sealed_data, mac>)
+		In(senc(<~k, ~nonce>, sk))
+	]--[
+		Neq($sk1, $sk2),
+		Neq($mk1, $mk2),
+		Neq($sk1, $mk1),
+		Neq($sk2, $mk2),
+
+		Done2(),
+		Secret(~k)
+	]->[
+	]
+
+rule Server_U:
+	let
+		mk = shared_key($mk2)
+		//2 computed_mac = MAC(<sealed_data, nonce>, mk)
+		self_key = sealing_key($server)
+		//2 k = sdec(sealed_data, self_key)
+		// k = sdec(sealed_data, sealing_key($server))
+		sk = shared_key($sk2)
+
+		sealed_data = senc(<$server, ~k>, self_key)
+	in
+	[
+		//2 In(<sealed_data, nonce, received_mac>)
+		In(<sealed_data, ~nonce, MAC(<sealed_data, ~nonce>, mk)>)
+	]--[
+		//2 Eq(received_mac, computed_mac),
+		Secret(~k)
+	]->[
+		Out(senc(<~k, ~nonce>, sk))
+	]
+
+////////////////////////////////////////////////////////////////////////
+/////////////////////////////  Properties  /////////////////////////////
+////////////////////////////////////////////////////////////////////////
 
 restriction Equality:
 	"All x y #i. Eq(x,y)@i ==> x=y"
+
+restriction Inequality:
+	"All x #i. Neq(x,x) @ #i ==> F"
+
+// TODO restringir single ~k para evitar split dig?
 
 lemma secrecy:
 	"All k #i #j. Secret(k) @i & K(k) @j ==> F"
 
 lemma functional: exists-trace
-	"Ex #i. Done() @ #i"
+	"Ex #i #j. Done1() @ #i & Done2() @ #j"
 
 end
