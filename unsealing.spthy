@@ -1,0 +1,60 @@
+theory Unsealing
+begin
+
+builtins: symmetric-encryption
+
+functions: shared_key/1 [private], sealing_key/1 [private], MAC/2
+
+rule Client_1:
+	let
+		mk = shared_key($mk)
+	in
+	[
+		Fr(~sealed_data),
+		Fr(~nonce)
+	]--[
+	]->[
+		AState($A, ~nonce),
+		Out(<~sealed_data, ~nonce, MAC(<~sealed_data, ~nonce>, mk)>)
+	]
+
+rule Client_2:
+	let
+		sk = shared_key($sk)
+	in
+	[
+		AState($A, nonce),
+		// In(<sealed_data, mac>)
+		In(senc(<k, nonce>, sk))
+	]--[
+		Done(),
+		Secret(k)
+	]->[
+	]
+
+rule Server:
+	let
+		mk = shared_key($mk)
+		computed_mac = MAC(<sealed_data, nonce>, mk)
+		k = sdec(sealed_data, sealing_key($server))
+		sk = shared_key($sk)
+	in
+	[
+		In(<sealed_data, nonce, received_mac>)
+	]--[
+		Eq(received_mac, computed_mac),
+		Secret(k)
+	]->[
+		Out(senc(<k, nonce>, sk))
+	]
+
+restriction Equality:
+	"All x y #i. Eq(x,y)@i ==> x=y"
+
+lemma secrecy:
+	"All k #i #j. Secret(k) @i & K(k) @j ==> F"
+
+lemma functional: exists-trace
+	"Ex #i. Done() @ #i"
+
+end
