@@ -12,16 +12,18 @@ functions: shared_key/1 [private], sealing_key/1 [private], MAC/2
 rule Client_1_S [color=#add8e6]:
 	let
 		sk = shared_key($sk1)
+		m = senc(<~k, ~nonce>, sk)
 	in
 	[
 		Fr(~k),
 		Fr(~nonce),
 		Fr(~tid)
 	]--[
-		AliceKey(~tid, $A, ~k)
+		Client_1_S_O(m),
+		AliceKey(~tid, ~k)
 	]->[
-		AState(~tid, $A, ~k, ~nonce),
-		Out(senc(<~k, ~nonce>, sk))
+		AState(~tid, ~k, ~nonce),
+		Out(m)
 	]
 
 rule Client_2_S [color=#add8e6]:
@@ -30,15 +32,13 @@ rule Client_2_S [color=#add8e6]:
 		sk = shared_key($sk1)
 	in
 	[
-		AState(~tid, $A, ~k, ~nonce),
+		AState(~tid, ~k, ~nonce),
 		In(<sealed_data, MAC(<sealed_data, ~nonce>, mk)>)
 	]--[
-		Sealed(~tid, $A, mk, sk),
+		Sealed(~tid, mk, sk),
 		// Eq(mac, MAC(<sealed_data, ~nonce>, mk)),
 		Done1(),
-		Secret(~k),
-		// Eq($A, $B)
-		Eq($A, $A)
+		Secret(~k)
 	]->[
 		Out(sealed_data) // send to network instead of saving to disk
 	]
@@ -50,10 +50,13 @@ rule Server_S [color=#d3d3d3]:
 		self_key = sealing_key($server)
 		sealed_data = senc(<$server, ~k>, self_key)
 		// REVIEW remove $server from sealed data since key already bound to it?
+		m = senc(<~k, ~nonce>, sk)
 	in
 	[
-		In(senc(<~k, ~nonce>, sk))
+		In(m)
 	]--[
+		Server_S_I(~k, m),
+		N1(~nonce),
 		Secret(~k)
 	]->[
 		Out(<sealed_data, MAC(<sealed_data, ~nonce>, mk)>)
@@ -74,7 +77,7 @@ rule Client_1_U [color=#ffb6c1]:
 		Fr(~tid)
 	]--[
 	]->[
-		BState(~tid, $B, ~nonce),
+		BState(~tid, ~nonce),
 		Out(<sealed_data, ~nonce, MAC(<sealed_data, ~nonce>, mk)>)
 	]
 
@@ -84,12 +87,13 @@ rule Client_2_U [color=#ffb6c1]:
 		sk = shared_key($sk2)
 	in
 	[
-		BState(~tid, $B, ~nonce),
+		BState(~tid, ~nonce),
 		// In(<sealed_data, mac>)
 		In(senc(<~k, ~nonce>, sk))
 	]--[
-		Unsealed(~tid, $B, mk, sk),
-		BorisKey(~tid, $B, ~k),
+		Client_2_U_I(~k, senc(<~k, ~nonce>, sk)),
+		Unsealed(~tid, mk, sk),
+		BorisKey(~tid, ~k),
 		// Neq($sk1, $sk2),
 		// Neq($mk1, $mk2),
 		// Neq($sk1, $mk1),
@@ -115,6 +119,8 @@ rule Server_U [color=#d3d3d3]:
 		//2 In(<sealed_data, nonce, received_mac>)
 		In(<sealed_data, ~nonce, MAC(<sealed_data, ~nonce>, mk)>)
 	]--[
+		N2(~nonce),
+		Server_U_O(senc(<~k, ~nonce>, sk)),
 		//2 Eq(received_mac, computed_mac),
 		Secret(~k)
 	]->[
@@ -125,11 +131,26 @@ rule Server_U [color=#d3d3d3]:
 /////////////////////////////  Properties  /////////////////////////////
 ////////////////////////////////////////////////////////////////////////
 
-restriction Equality:
-	"All x y #i. Eq(x,y)@i ==> x=y"
+// restriction Equality:
+// 	"All x y #i. Eq(x,y)@i ==> x=y"
 
 // restriction Inequality:
 // 	"All x #i. Neq(x,x) @ #i ==> F"
+
+restriction foo:
+	"All n1 n2 #i #j. N1(n1) @ #i & N2(n2) @ #j ==> not(n1=n2)"
+
+lemma loop [sources]:
+	"(All k m #i.
+		Server_S_I(k, m) @ #i ==> (
+			(Ex #j. KU(k) @ #j & j < i) | (Ex #j. Client_1_S_O(m) @ #j)
+		)
+	) &
+	(All k m #i.
+		Client_2_U_I(k, m) @ #i ==> (
+			(Ex #j. KU(k) @ #j & j < i) | (Ex #j. Server_U_O(m) @ #j)
+		)
+	)"
 
 // TODO restringir single ~k para evitar split dig?
 // FIXME Client-2-S ignorado, mesmo in out?
@@ -143,12 +164,12 @@ lemma functional: exists-trace
 lemma executable: exists-trace
 	"Ex
 		key
-		tid_Alice A mk1 sk1
-		tid_Boris B mk2 sk2
+		tid_Alice mk1 sk1
+		tid_Boris mk2 sk2
 	#i #j #x #y.
-	Sealed(tid_Alice, A, mk1, sk1) @ #i &
-	Unsealed(tid_Boris, B, mk2, sk2) @ #j &
-	AliceKey(tid_Alice, A, key) @ #x &
-	BorisKey(tid_Boris, B, key) @ #y"
+	Sealed(tid_Alice, mk1, sk1) @ #i &
+	Unsealed(tid_Boris, mk2, sk2) @ #j &
+	AliceKey(tid_Alice, key) @ #x &
+	BorisKey(tid_Boris, key) @ #y"
 
 end
