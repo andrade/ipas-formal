@@ -88,6 +88,7 @@ rule Server [color=#d3d3d3]:
 		mk = session_key($mk)
 		sk = session_key($sk)
 
+		// FIXME Porque não termina quando k não é fresco? (aparecem centenas de partial deconstructions) Afinal `flow` termina mas demora 2m20,
 		s = senc(~k, sealing_key($server))
 		computed_mac = MAC(<s, nonce>, mk)
 	in
