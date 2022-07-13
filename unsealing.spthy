@@ -6,6 +6,16 @@ builtins: symmetric-encryption
 functions: session_key/1 [private], sealing_key/1 [private], MAC/2
 
 /**
+** Model AEAD where
+**     encryption(plaintext, associated data, nonce, secret key) = ciphertext
+**     decryption(ciphertext, associated data, nonce, secret key) = plaintext
+**/
+functions: aead_enc/4, aead_dec/4, aead_ver/4, true/0
+equations:
+	aead_dec(aead_enc(m, a, n, k), a, n, k) = m,
+	aead_ver(aead_enc(m, a, n, k), a, n, k) = true // REVIEW
+
+/**
 ** Previous sealed data is read from persistent memory,
 ** where it was previously saved during the sealing protocol, and
 ** loaded into the enclave. Persistent memory is untrusted.
@@ -13,15 +23,20 @@ functions: session_key/1 [private], sealing_key/1 [private], MAC/2
 ** We model this by recreating a sealed data bundle that is sent to
 ** the network and available to both honest agents and adversary.
 **/
-rule Setup:
+rule Storage:
 	let
-		sealed_data = senc(~k, sealing_key($server))
+		s = senc(~k, sealing_key($server)) // sealed data, by CSS
+		a = <~n, s>
+		c = aead_enc(~d, a, ~n, ~k)
+		m = <c, a>
 	in
 	[
-		Fr(~k)
+		Fr(~d), // client data to encrypt
+		Fr(~n), // nonce for AEAD encryption
+		Fr(~k)  // secret key for AEAD encryption
 	]--[
 	]->[
-		Out(sealed_data)
+		Out(m)
 	]
 
 // rule Reveal:
@@ -36,67 +51,62 @@ rule Setup:
 // 		Out(k)
 // 	]
 
-rule Client_1 [color=#ffb6c1]:
+rule Client_1 [color=#00ffff]:
 	let
 		mk = session_key($mk)
+
+		m = <c, a>
+		s = snd(a)
 	in
 	[
-		In(sealed_data),
+		In(m),
 		Fr(~nonce)
 	]--[
 	]->[
-		AState($A, ~nonce),
-		Out(<sealed_data, ~nonce, MAC(<sealed_data, ~nonce>, mk)>)
+		AState($Alice, ~nonce, c, a),
+		Out(<s, ~nonce, MAC(<s, ~nonce>, mk)>)
 	]
 
-rule Client_2 [color=#ffb6c1]:
+rule Client_2 [color=#00ffff]:
 	let
 		sk = session_key($sk)
+
+		plaintext = aead_dec(c, a, fst(a), k)
 	in
 	[
-		AState($A, ~nonce),
-		// In(<sealed_data, mac>)
+		AState($Alice, ~nonce, c, a),
 		In(senc(<k, ~nonce>, sk))
 	]--[
-		Progress_A2($A, k),
-		Secret(k)//, Honest($A), Role('initiator'),
-		// Done()
+		Eq(aead_ver(c, a, fst(a), k), true),
+		Progress_A2($Alice, k),
+		Secret(k)
 	]->[
 	]
 
 rule Server [color=#d3d3d3]:
 	let
-		// unsealed = <$server, k>
 		mk = session_key($mk)
-		// computed_mac = MAC(<sealed_data, nonce>, mk)
-		// unsealed = sdec(sealed_data, sealing_key($server))
-		// k = sdec(sealed_data, sealing_key($server))
 		sk = session_key($sk)
+
+		s = senc(~k, sealing_key($server))
+		computed_mac = MAC(<s, nonce>, mk)
 	in
 	[
-		In(<senc(~k, sealing_key($server)), nonce, MAC(<senc(~k, sealing_key($server)), nonce>, mk)>)
+		In(<s, nonce, received_mac>)
 	]--[
-		// Eq(received_mac, computed_mac),
-		Secret(~k)//, Honest($server), Role('responder')
-		// Eq(unsealed, <$server, k>),
+		Eq(received_mac, computed_mac),
+		Secret(~k)
 	]->[
 		Out(senc(<~k, nonce>, sk))
 	]
 
-// restriction Equality:
-// 	"All x y #i. Eq(x,y)@i ==> x=y"
+restriction Equality:
+	"All x y #i. Eq(x,y)@i ==> x=y"
 
 lemma flow: exists-trace
 	"Ex A k #i. Progress_A2(A, k) @ #i"
 
-// lemma secret_A:
-// 	"All k #i. Secret(k) @i & Role('initiator') @i ==>
-// 	(not(Ex #j. K(k) @j)) | (Ex X #j. Reveal(k)@j & Honest(X)@i)"
-
 lemma secrecy:
 	"All k #i #j. Secret(k) @i & K(k) @j ==> F"
-
-// lemma functional: exists-trace
-// 	"Ex #i. Done() @ #i"
 
 end
