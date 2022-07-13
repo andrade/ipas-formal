@@ -3,58 +3,100 @@ begin
 
 builtins: symmetric-encryption
 
-functions: shared_key/1 [private], sealing_key/1 [private], MAC/2
+functions: session_key/1 [private], sealing_key/1 [private], MAC/2
 
-rule Client_1:
+/**
+** Previous sealed data is read from persistent memory,
+** where it was previously saved during the sealing protocol, and
+** loaded into the enclave. Persistent memory is untrusted.
+**
+** We model this by recreating a sealed data bundle that is sent to
+** the network and available to both honest agents and adversary.
+**/
+rule Setup:
 	let
-		mk = shared_key($mk)
+		sealed_data = senc(~k, sealing_key($server))
 	in
 	[
-		Fr(~sealed_data),
+		Fr(~k)
+	]--[
+	]->[
+		Out(sealed_data)
+	]
+
+// rule Reveal:
+// 	let
+// 		k = sdec(sealed_data, sealing_key($server))
+// 	in
+// 	[
+// 		In(sealed_data)
+// 	]--[
+// 		Reveal(k)
+// 	]->[
+// 		Out(k)
+// 	]
+
+rule Client_1 [color=#ffb6c1]:
+	let
+		mk = session_key($mk)
+	in
+	[
+		In(sealed_data),
 		Fr(~nonce)
 	]--[
 	]->[
 		AState($A, ~nonce),
-		Out(<~sealed_data, ~nonce, MAC(<~sealed_data, ~nonce>, mk)>)
+		Out(<sealed_data, ~nonce, MAC(<sealed_data, ~nonce>, mk)>)
 	]
 
-rule Client_2:
+rule Client_2 [color=#ffb6c1]:
 	let
-		sk = shared_key($sk)
+		sk = session_key($sk)
 	in
 	[
-		AState($A, nonce),
+		AState($A, ~nonce),
 		// In(<sealed_data, mac>)
-		In(senc(<k, nonce>, sk))
+		In(senc(<k, ~nonce>, sk))
 	]--[
-		Done(),
-		Secret(k)
+		Progress_A2($A, k),
+		Secret(k)//, Honest($A), Role('initiator'),
+		// Done()
 	]->[
 	]
 
-rule Server:
+rule Server [color=#d3d3d3]:
 	let
-		mk = shared_key($mk)
-		computed_mac = MAC(<sealed_data, nonce>, mk)
-		k = sdec(sealed_data, sealing_key($server))
-		sk = shared_key($sk)
+		// unsealed = <$server, k>
+		mk = session_key($mk)
+		// computed_mac = MAC(<sealed_data, nonce>, mk)
+		// unsealed = sdec(sealed_data, sealing_key($server))
+		// k = sdec(sealed_data, sealing_key($server))
+		sk = session_key($sk)
 	in
 	[
-		In(<sealed_data, nonce, received_mac>)
+		In(<senc(~k, sealing_key($server)), nonce, MAC(<senc(~k, sealing_key($server)), nonce>, mk)>)
 	]--[
-		Eq(received_mac, computed_mac),
-		Secret(k)
+		// Eq(received_mac, computed_mac),
+		Secret(~k)//, Honest($server), Role('responder')
+		// Eq(unsealed, <$server, k>),
 	]->[
-		Out(senc(<k, nonce>, sk))
+		Out(senc(<~k, nonce>, sk))
 	]
 
-restriction Equality:
-	"All x y #i. Eq(x,y)@i ==> x=y"
+// restriction Equality:
+// 	"All x y #i. Eq(x,y)@i ==> x=y"
+
+lemma flow: exists-trace
+	"Ex A k #i. Progress_A2(A, k) @ #i"
+
+// lemma secret_A:
+// 	"All k #i. Secret(k) @i & Role('initiator') @i ==>
+// 	(not(Ex #j. K(k) @j)) | (Ex X #j. Reveal(k)@j & Honest(X)@i)"
 
 lemma secrecy:
 	"All k #i #j. Secret(k) @i & K(k) @j ==> F"
 
-lemma functional: exists-trace
-	"Ex #i. Done() @ #i"
+// lemma functional: exists-trace
+// 	"Ex #i. Done() @ #i"
 
 end
