@@ -3,138 +3,105 @@ begin
 
 builtins: symmetric-encryption
 
-functions: shared_key/1 [private], sealing_key/1 [private], MAC/2
+functions: session_key/1 [private], sealing_key/1 [private], MAC/2
 
-////////////////////////////////////////////////////////////////////////
-//////////////////////////////  Sealing  //////////////////////////////
-////////////////////////////////////////////////////////////////////////
+/**
+** Model AEAD where
+**     encryption(plaintext, associated data, nonce, secret key) = ciphertext
+**     decryption(ciphertext, associated data, nonce, secret key) = plaintext
+**/
+functions: aead_enc/4, aead_dec/4, aead_ver/4, true/0
+equations:
+	aead_dec(aead_enc(m, a, n, k), a, n, k) = m,
+	aead_ver(aead_enc(m, a, n, k), a, n, k) = true // REVIEW
 
-rule Client_1_S [color=#add8e6]:
+/**
+** Client writes the client encrypted data plus the
+** sealed client encryption key to persistent memory.
+** Persistent memory is untrusted.
+**
+** We model this by having the client sending m to storage
+** via public network which is available to the adversary.
+**/
+rule Storage:
 	let
-		sk = shared_key($sk1)
-		m = senc(<~k, ~nonce>, sk)
-	in
-	[
-		Fr(~k),
-		Fr(~nonce),
-		Fr(~tid)
-	]--[
-		Client_1_S_O(m),
-		AliceKey(~tid, ~k)
-	]->[
-		AState(~tid, ~k, ~nonce),
-		Out(m)
-	]
-
-rule Client_2_S [color=#add8e6]:
-	let
-		mk = shared_key($mk1)
-		sk = shared_key($sk1)
-	in
-	[
-		AState(~tid, ~k, ~nonce),
-		In(<sealed_data, MAC(<sealed_data, ~nonce>, mk)>)
-	]--[
-		Client_2_S_O(sealed_data),
-		Sealed(~tid, mk, sk),
-		// Eq(mac, MAC(<sealed_data, ~nonce>, mk)),
-		Done1(),
-		Secret(~k)
-	]->[
-		Out(sealed_data) // send to network instead of saving to disk
-	]
-
-rule Server_S [color=#d3d3d3]:
-	let
-		sk = shared_key($sk1)
-		mk = shared_key($mk1)
-		self_key = sealing_key($server)
-		sealed_data = senc(<$server, ~k>, self_key)
-		// REVIEW remove $server from sealed data since key already bound to it?
-		m = senc(<~k, ~nonce>, sk)
+		m = <c, a>
 	in
 	[
 		In(m)
 	]--[
-		// SessionKeys_S($mk1, $sk1),
-		Seeds_S($mk1, $sk1),
-		Server_S_I(~k, m),
-		N1(~nonce),
-		Secret(~k)
+		Storage(m)
 	]->[
-		Out(<sealed_data, MAC(<sealed_data, ~nonce>, mk)>)
 	]
 
-////////////////////////////////////////////////////////////////////////
-/////////////////////////////  Unsealing  /////////////////////////////
-////////////////////////////////////////////////////////////////////////
-
-rule Client_1_U [color=#ffb6c1]:
+rule Client_1 [color=#00ffff]:
 	let
-		mk = shared_key($mk2)
+		sk = session_key($sk)
+		m = senc(<~k, ~nonce>, sk)
 	in
 	[
-		In(sealed_data), // receive from network instead of loading from disk
-		// Fr(~sealed_data),
-		Fr(~nonce),
-		Fr(~tid)
+		Fr(~k),
+		Fr(~nonce)
 	]--[
-		Client_1_U_I(sealed_data)
+		Progress_A1($Alice, m),
+		Client_1_S_O(m)//,
+		// AliceKey(~tid, ~k)//,
+		// Secret(~k), Honest('A'), Honest('B'), Role('initiator A')
 	]->[
-		BState(~tid, ~nonce),
-		Out(<sealed_data, ~nonce, MAC(<sealed_data, ~nonce>, mk)>)
+		AState($Alice, ~k, ~nonce),
+		Out(m)
 	]
 
-rule Client_2_U [color=#ffb6c1]:
+rule Client_2 [color=#00ffff]:
 	let
-		mk = shared_key($mk2)
-		sk = shared_key($sk2)
+		mk = session_key($mk)
+		i = <sealed_data, MAC(<sealed_data, ~nonce>, mk)>
+
+		sk = session_key($sk)
+
+		a = <~n, sealed_data>
+		c = aead_enc(~d, a, ~n, ~k)
+		m = <c, a>
 	in
 	[
-		BState(~tid, ~nonce),
-		// In(<sealed_data, mac>)
-		In(senc(<~k, ~nonce>, sk))
+		AState($Alice, ~k, ~nonce),
+		In(i),
+		Fr(~d),
+		Fr(~n)
 	]--[
-		Client_2_U_I(~k, senc(<~k, ~nonce>, sk)),
-		Unsealed(~tid, mk, sk),
-		BorisKey(~tid, ~k),
-		// Neq($sk1, $sk2),
-		// Neq($mk1, $mk2),
-		// Neq($sk1, $mk1),
-		// Neq($sk2, $mk2),
-
-		Done2(),
-		Secret(~k)
+		Progress_A2($Alice, i, m),
+		// Progress_A2($Alice, ~k, ~nonce, i, m),
+		Client_2_S_O(sealed_data),
+		// Sealed(~tid, ~mk, ~sk),
+		// Eq(mac, MAC(<sealed_data, ~nonce>, mk)),
+		Done1(),
+		Secret(~k), Honest('A'), Honest('B'), Role('initiator_A')
 	]->[
+		Out(m) // send to network instead of saving to disk
 	]
 
-rule Server_U [color=#d3d3d3]:
+rule Server [color=#d3d3d3]:
 	let
-		mk = shared_key($mk2)
-		//2 computed_mac = MAC(<sealed_data, nonce>, mk)
+		sk = session_key($sk)
+		m = senc(<k, nonce>, sk)
+
 		self_key = sealing_key($server)
-		//2 k = sdec(sealed_data, self_key)
-		// k = sdec(sealed_data, sealing_key($server))
-		sk = shared_key($sk2)
+		sealed_data = senc(k, self_key)
 
-		sealed_data = senc(<$server, ~k>, self_key)
+		mk = session_key($mk)
+		o = <sealed_data, MAC(<sealed_data, nonce>, mk)>
 	in
 	[
-		//2 In(<sealed_data, nonce, received_mac>)
-		In(<sealed_data, ~nonce, MAC(<sealed_data, ~nonce>, mk)>)
+		In(m)
 	]--[
-		Seeds_U($mk2, $sk2),
-		N2(~nonce),
-		Server_U_O(senc(<~k, ~nonce>, sk)),
-		//2 Eq(received_mac, computed_mac),
-		Secret(~k)
+		Progress_S1($CSS, m, o),
+		Seeds_S($mk1, $sk1),
+		Server_S_I(k, m),
+		N1(nonce),
+		Secret(k), Honest('A'), Honest('B'), Role('responder_S')
 	]->[
-		Out(senc(<~k, ~nonce>, sk))
+		Out(o)
 	]
-
-////////////////////////////////////////////////////////////////////////
-/////////////////////////////  Properties  /////////////////////////////
-////////////////////////////////////////////////////////////////////////
 
 // restriction Equality:
 // 	"All x y #i. Eq(x,y)@i ==> x=y"
@@ -145,30 +112,63 @@ rule Server_U [color=#d3d3d3]:
 // restriction foo:
 // 	"All n1 n2 #i #j. N1(n1) @ #i & N2(n2) @ #j ==> not(n1=n2)"
 
-// different sessions between sealing and unsealing: fixes non-termination
-restriction diff_seeds:
-	"All mk1 sk1 mk2 sk2 #i #j.
-	Seeds_S(mk1, sk1) @ #i & Seeds_U(mk2, sk2) @ #j
-	==> not(mk1=mk2) & not(sk1=sk2)"
+// // different sessions between sealing and unsealing: fixes non-termination
+// restriction diff_seeds:
+// 	"All mk1 sk1 mk2 sk2 #i #j.
+// 	Seeds_S(mk1, sk1) @ #i & Seeds_U(mk2, sk2) @ #j
+// 	==> not(mk1=mk2) & not(sk1=sk2)"
+
+// lemma loop [sources]:
+// 	"
+// 	(All k m #i.
+// 		Server_S_I(k, m) @ #i ==> (
+// 			(Ex #j. KU(k) @ #j & j < i) | (Ex #j. Client_1_S_O(m) @ #j)
+// 		)
+// 	)
+// 	&
+// 	(All k m #i.
+// 		Client_2_U_I(k, m) @ #i ==> (
+// 			(Ex #j. KU(k) @ #j & j < i) | (Ex #j. Server_U_O(m) @ #j)
+// 		)
+// 	)
+// 	&
+// 	(All m #i. Client_1_U_I(m) @ #i ==> (Ex #j. Client_2_S_O(m) @ #j))
+// 	"
 
 // TODO restringir single ~k para evitar split dig?
 // FIXME Client-2-S ignorado, mesmo in out?
 
-lemma secrecy:
-	"All k #i #j. Secret(k) @i & K(k) @j ==> F"
+lemma flow: exists-trace
+	"Ex A B m1 m2 m3 #t1 #t2 #t3 #t4.
+	Progress_A1(A, m1) @ t1 &
+	Progress_S1(B, m1, m2) @ t2 &
+	Progress_A2(A, m2, m3) @ t3 &
+	Storage(m3) @ t4"/* &
 
-lemma functional: exists-trace
-	"Ex #i #j. Done1() @ #i & Done2() @ #j"
+	t1 < t2 &
+	t2 < t3 &
+	t3 < t4"*/
 
-lemma executable: exists-trace
-	"Ex
-		key
-		tid_Alice mk1 sk1
-		tid_Boris mk2 sk2
-	#i #j #x #y.
-	Sealed(tid_Alice, mk1, sk1) @ #i &
-	Unsealed(tid_Boris, mk2, sk2) @ #j &
-	AliceKey(tid_Alice, key) @ #x &
-	BorisKey(tid_Boris, key) @ #y"
+// lemma secrecy:
+// 	"All k #i #j. Secret(k) @i & K(k) @j ==> F"
+
+// lemma secret_A:
+// 	"All k #i. Secret(k) @i & Role('initiator_A') @i ==>
+// 	(not(Ex #j. K(k) @j))"
+
+// lemma functional: exists-trace
+// 	"Ex #i #j. Done1() @ #i & Done2() @ #j"
+
+// // c, 37s
+// lemma executable: exists-trace
+// 	"Ex
+// 		key
+// 		tid_Alice mk1 sk1
+// 		tid_Boris mk2 sk2
+// 	#i #j #x #y.
+// 	Sealed(tid_Alice, mk1, sk1) @ #i &
+// 	Unsealed(tid_Boris, mk2, sk2) @ #j &
+// 	AliceKey(tid_Alice, key) @ #x &
+// 	BorisKey(tid_Boris, key) @ #y"
 
 end
