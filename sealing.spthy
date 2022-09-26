@@ -44,6 +44,7 @@ rule Client_1 [color=#00ffff]:
 		Fr(~nonce)
 	]--[
 		Progress_A1($Alice, m),
+		OUT_I_1(m),
 		Client_1_S_O(m)//,
 		// AliceKey(~tid, ~k)//,
 		// Secret(~k), Honest('A'), Honest('B'), Role('initiator A')
@@ -70,6 +71,7 @@ rule Client_2 [color=#00ffff]:
 		Fr(~n)
 	]--[
 		Progress_A2($Alice, i, m),
+		Secret(~k)
 		// Progress_A2($Alice, ~k, ~nonce, i, m),
 		Client_2_S_O(sealed_data),
 		// Sealed(~tid, ~mk, ~sk),
@@ -80,21 +82,27 @@ rule Client_2 [color=#00ffff]:
 		Out(m) // send to network instead of saving to disk
 	]
 
+// TODO assume only one server/CSS ?
 rule Server [color=#d3d3d3]:
 	let
 		sk = session_key($sk)
 		m = senc(<k, nonce>, sk)
 
-		self_key = sealing_key($server)
+		// self_key = sealing_key($server) // hundreds of PD solved by `types`
+		self_key = ~x // assegurar instância única
 		sealed_data = senc(k, self_key)
 
 		mk = session_key($mk)
 		o = <sealed_data, MAC(<sealed_data, nonce>, mk)>
 	in
 	[
+		Fr(~x), // assegurar instância única
+
 		In(m)
 	]--[
 		Progress_S1($CSS, m, o),
+		IN_R_1_foo(k, m),
+		Secret(k),
 		Seeds_S($mk1, $sk1),
 		Server_S_I(k, m),
 		N1(nonce),
@@ -118,22 +126,19 @@ rule Server [color=#d3d3d3]:
 // 	Seeds_S(mk1, sk1) @ #i & Seeds_U(mk2, sk2) @ #j
 // 	==> not(mk1=mk2) & not(sk1=sk2)"
 
-// lemma loop [sources]:
-// 	"
-// 	(All k m #i.
-// 		Server_S_I(k, m) @ #i ==> (
-// 			(Ex #j. KU(k) @ #j & j < i) | (Ex #j. Client_1_S_O(m) @ #j)
-// 		)
-// 	)
-// 	&
-// 	(All k m #i.
-// 		Client_2_U_I(k, m) @ #i ==> (
-// 			(Ex #j. KU(k) @ #j & j < i) | (Ex #j. Server_U_O(m) @ #j)
-// 		)
-// 	)
-// 	&
-// 	(All m #i. Client_1_U_I(m) @ #i ==> (Ex #j. Client_2_S_O(m) @ #j))
-// 	"
+/**
+** Whenever responder receives the client data encryption key, K,
+** either K was known to adversary or initiator sent m1 beforehand.
+**/
+lemma types [sources]:
+	"
+	All k m #i.
+	IN_R_1_foo(k, m) @ #i ==> (
+		(Ex #j. KU(k) @ #j & #j < #i)
+		| (Ex #j. OUT_I_1(m) @ #j)
+	)
+	"
+
 
 // TODO restringir single ~k para evitar split dig?
 // FIXME Client-2-S ignorado, mesmo in out?
@@ -149,8 +154,8 @@ lemma flow: exists-trace
 	t2 < t3 &
 	t3 < t4"*/
 
-// lemma secrecy:
-// 	"All k #i #j. Secret(k) @i & K(k) @j ==> F"
+lemma secrecy:
+	"All x #i #j. Secret(x) @i & K(x) @j ==> F"
 
 // lemma secret_A:
 // 	"All k #i. Secret(k) @i & Role('initiator_A') @i ==>
