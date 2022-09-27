@@ -48,18 +48,6 @@ rule Storage:
 		Out(m)
 	]
 
-// rule Reveal:
-// 	let
-// 		k = sdec(sealed_data, sealing_key($server))
-// 	in
-// 	[
-// 		In(sealed_data)
-// 	]--[
-// 		Reveal(k)
-// 	]->[
-// 		Out(k)
-// 	]
-
 rule Client_1 [color=#00ffff]:
 	let
 		mk = session_key($mk)
@@ -89,7 +77,6 @@ rule Client_2 [color=#00ffff]:
 	]--[
 		Eq(aead_ver(c, a, fst(a), k), true),
 		Progress_A2($Alice, senc(<k, ~nonce>, sk)),
-		// Progress_A2($Alice, k),
 		Secret(k)
 	]->[
 	]
@@ -105,9 +92,9 @@ rule Server [color=#d3d3d3]:
 	[
 		In(<s, nonce, received_mac>)
 	]--[
-		Progress_S1($server, <s, nonce, received_mac>, senc(<k, nonce>, sk)),
-		IN_R_1_foo(k),
 		Eq(received_mac, computed_mac),
+		IN_R_1(k),
+		Progress_S1($server, <s, nonce, received_mac>, senc(<k, nonce>, sk)),
 		Secret(k)
 	]->[
 		Out(senc(<k, nonce>, sk))
@@ -119,9 +106,8 @@ restriction Equality:
 lemma types [sources]:
 	"
 	All k #i.
-	IN_R_1_foo(k) @ #i ==> (
+	IN_R_1(k) @ #i ==> (
 		(Ex #j. KU(k) @ #j & #j < #i)
-		// | (Ex #j. OUT_I_1(m) @ #j)
 		| (Ex #j. OUT_0(k) @ #j)
 	)
 	"
@@ -133,8 +119,6 @@ lemma flow: exists-trace
 	Progress_A1(A, m0, m1) @ #j &
 	Progress_S1(B, m1, m2) @ #k &
 	Progress_A2(A, m2) @ #l
-
-	// REVIEW mais rápido com ordem temporal?
 	"
 
 lemma secrecy:

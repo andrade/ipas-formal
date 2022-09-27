@@ -22,12 +22,6 @@ equations:
 	aead_dec(aead_enc(m, a, n, k), a, n, k) = m,
 	aead_ver(aead_enc(m, a, n, k), a, n, k) = true // REVIEW
 
-// rule Reveal_IAS:
-// 	let
-// 		x = session_key($x)
-// 	in
-// 	[ ]--[ Reveal() ]->[ Out(x) ]
-
 /**
 ** Client writes the client encrypted data plus the
 ** sealed client encryption key to persistent memory.
@@ -56,11 +50,8 @@ rule Client_1 [color=#00ffff]:
 		Fr(~k),
 		Fr(~nonce)
 	]--[
-		Progress_A1($Alice, m),
 		OUT_I_1(m),
-		Client_1_S_O(m)//,
-		// AliceKey(~tid, ~k)//,
-		// Secret(~k), Honest('A'), Honest('B'), Role('initiator A')
+		Progress_A1($Alice, m)
 	]->[
 		AState($Alice, ~k, ~nonce),
 		Out(m)
@@ -70,8 +61,6 @@ rule Client_2 [color=#00ffff]:
 	let
 		mk = session_key($mk)
 		i = <sealed_data, MAC(<sealed_data, ~nonce>, mk)>
-
-		// sk = session_key($sk)
 
 		a = <~n, sealed_data>
 		c = aead_enc(~d, a, ~n, ~k)
@@ -85,23 +74,17 @@ rule Client_2 [color=#00ffff]:
 	]--[
 		Progress_A2($Alice, i, m),
 		Secret(~k)
-		// Progress_A2($Alice, ~k, ~nonce, i, m),
-		// Sealed(~tid, ~mk, ~sk),
-		// Eq(mac, MAC(<sealed_data, ~nonce>, mk)),
-		// Done1()//,
-		// Secret(~k), Honest('A'), Honest('B'), Role('initiator_A')
 	]->[
 		Out(m) // send to network instead of saving to disk
 	]
 
-// TODO assume only one server/CSS ?
 rule Server [color=#d3d3d3]:
 	let
 		sk = session_key($sk)
 		m = senc(<k, nonce>, sk)
 
-		// self_key = sealing_key($server) // hundreds of PD solved by `types`
-		self_key = ~x // assegurar instância única
+		// self_key = sealing_key($server)
+		self_key = ~x // assegurar instância única (self_key only needed here)
 		sealed_data = senc(k, self_key)
 
 		mk = session_key($mk)
@@ -109,33 +92,14 @@ rule Server [color=#d3d3d3]:
 	in
 	[
 		Fr(~x), // assegurar instância única
-
 		In(m)
 	]--[
+		IN_R_1(k, m),
 		Progress_S1($CSS, m, o),
-		IN_R_1_foo(k, m),
-		Secret(k),
-		Seeds_S($mk1, $sk1),
-		N1(nonce)//,
-		// Secret(k), Honest('A'), Honest('B'), Role('responder_S')
+		Secret(k)
 	]->[
 		Out(o)
 	]
-
-// restriction Equality:
-// 	"All x y #i. Eq(x,y)@i ==> x=y"
-
-// restriction Inequality:
-// 	"All x #i. Neq(x,x) @ #i ==> F"
-
-// restriction foo:
-// 	"All n1 n2 #i #j. N1(n1) @ #i & N2(n2) @ #j ==> not(n1=n2)"
-
-// // different sessions between sealing and unsealing: fixes non-termination
-// restriction diff_seeds:
-// 	"All mk1 sk1 mk2 sk2 #i #j.
-// 	Seeds_S(mk1, sk1) @ #i & Seeds_U(mk2, sk2) @ #j
-// 	==> not(mk1=mk2) & not(sk1=sk2)"
 
 /**
 ** Whenever responder receives the client data encryption key, K,
@@ -144,15 +108,11 @@ rule Server [color=#d3d3d3]:
 lemma types [sources]:
 	"
 	All k m #i.
-	IN_R_1_foo(k, m) @ #i ==> (
+	IN_R_1(k, m) @ #i ==> (
 		(Ex #j. KU(k) @ #j & #j < #i)
 		| (Ex #j. OUT_I_1(m) @ #j)
 	)
 	"
-
-
-// TODO restringir single ~k para evitar split dig?
-// FIXME Client-2-S ignorado, mesmo in out?
 
 lemma flow: exists-trace
 	"Ex A B m1 m2 m3 #t1 #t2 #t3 #t4.
@@ -167,32 +127,5 @@ lemma flow: exists-trace
 
 lemma secrecy:
 	"All x #i #j. Secret(x) @i & K(x) @j ==> F"
-
-// lemma client_encryption_key:
-// 	"not(
-// 		Ex k #i #j.
-// 		SecretK(k) @ #i
-// 		& K(k) @ #j
-// 		& not(Ex #r. Reveal() @ #r)
-// 	)"
-
-// lemma secret_A:
-// 	"All k #i. Secret(k) @i & Role('initiator_A') @i ==>
-// 	(not(Ex #j. K(k) @j))"
-
-// lemma functional: exists-trace
-// 	"Ex #i #j. Done1() @ #i & Done2() @ #j"
-
-// // c, 37s
-// lemma executable: exists-trace
-// 	"Ex
-// 		key
-// 		tid_Alice mk1 sk1
-// 		tid_Boris mk2 sk2
-// 	#i #j #x #y.
-// 	Sealed(tid_Alice, mk1, sk1) @ #i &
-// 	Unsealed(tid_Boris, mk2, sk2) @ #j &
-// 	AliceKey(tid_Alice, key) @ #x &
-// 	BorisKey(tid_Boris, key) @ #y"
 
 end
