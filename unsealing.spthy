@@ -1,3 +1,10 @@
+/**
+** Protocol: IPAS-Unsealing
+** Author:   Daniel Andrade
+** Date:     2022
+** Status:   Working
+**/
+
 theory Unsealing
 begin
 

@@ -1,3 +1,10 @@
+/**
+** Protocol: IPAS-Sealing
+** Author:   Daniel Andrade
+** Date:     2022
+** Status:   Working
+**/
+
 theory Sealing
 begin
 
