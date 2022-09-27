@@ -25,7 +25,7 @@ equations:
 **/
 rule Storage:
 	let
-		s = senc(~k, sealing_key($server)) // sealed data, by CSS
+		s = senc(~k, sealing_key($server)) // previously sealed data, by CSS
 		a = <~n, s>
 		c = aead_enc(~d, a, ~n, ~k)
 		m = <c, a>
@@ -35,6 +35,8 @@ rule Storage:
 		Fr(~n), // nonce for AEAD encryption
 		Fr(~k)  // secret key for AEAD encryption
 	]--[
+		Storage(m),
+		OUT_0(~k)
 	]->[
 		Out(m)
 	]
@@ -62,6 +64,7 @@ rule Client_1 [color=#00ffff]:
 		In(m),
 		Fr(~nonce)
 	]--[
+		Progress_A1($Alice, m, <s, ~nonce, MAC(<s, ~nonce>, mk)>)
 	]->[
 		AState($Alice, ~nonce, c, a),
 		Out(<s, ~nonce, MAC(<s, ~nonce>, mk)>)
@@ -78,7 +81,8 @@ rule Client_2 [color=#00ffff]:
 		In(senc(<k, ~nonce>, sk))
 	]--[
 		Eq(aead_ver(c, a, fst(a), k), true),
-		Progress_A2($Alice, k),
+		Progress_A2($Alice, senc(<k, ~nonce>, sk)),
+		// Progress_A2($Alice, k),
 		Secret(k)
 	]->[
 	]
@@ -95,6 +99,8 @@ rule Server [color=#d3d3d3]:
 	[
 		In(<s, nonce, received_mac>)
 	]--[
+		Progress_S1($server, <s, nonce, received_mac>, senc(<~k, nonce>, sk)),
+		IN_R_1_foo(~k),
 		Eq(received_mac, computed_mac),
 		Secret(~k)
 	]->[
@@ -104,8 +110,26 @@ rule Server [color=#d3d3d3]:
 restriction Equality:
 	"All x y #i. Eq(x,y)@i ==> x=y"
 
+lemma types [sources]:
+	"
+	All k #i.
+	IN_R_1_foo(k) @ #i ==> (
+		(Ex #j. KU(k) @ #j & #j < #i)
+		// | (Ex #j. OUT_I_1(m) @ #j)
+		| (Ex #j. OUT_0(k) @ #j)
+	)
+	"
+
 lemma flow: exists-trace
-	"Ex A k #i. Progress_A2(A, k) @ #i"
+	"
+	Ex A B m0 m1 m2 #i #j #k #l.
+	Storage(m0) @ #i &
+	Progress_A1(A, m0, m1) @ #j &
+	Progress_S1(B, m1, m2) @ #k &
+	Progress_A2(A, m2) @ #l
+
+	// REVIEW mais rápido com ordem temporal?
+	"
 
 lemma secrecy:
 	"All k #i #j. Secret(k) @i & K(k) @j ==> F"

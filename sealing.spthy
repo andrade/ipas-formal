@@ -15,6 +15,12 @@ equations:
 	aead_dec(aead_enc(m, a, n, k), a, n, k) = m,
 	aead_ver(aead_enc(m, a, n, k), a, n, k) = true // REVIEW
 
+// rule Reveal_IAS:
+// 	let
+// 		x = session_key($x)
+// 	in
+// 	[ ]--[ Reveal() ]->[ Out(x) ]
+
 /**
 ** Client writes the client encrypted data plus the
 ** sealed client encryption key to persistent memory.
@@ -58,7 +64,7 @@ rule Client_2 [color=#00ffff]:
 		mk = session_key($mk)
 		i = <sealed_data, MAC(<sealed_data, ~nonce>, mk)>
 
-		sk = session_key($sk)
+		// sk = session_key($sk)
 
 		a = <~n, sealed_data>
 		c = aead_enc(~d, a, ~n, ~k)
@@ -73,11 +79,10 @@ rule Client_2 [color=#00ffff]:
 		Progress_A2($Alice, i, m),
 		Secret(~k)
 		// Progress_A2($Alice, ~k, ~nonce, i, m),
-		Client_2_S_O(sealed_data),
 		// Sealed(~tid, ~mk, ~sk),
 		// Eq(mac, MAC(<sealed_data, ~nonce>, mk)),
-		Done1(),
-		Secret(~k), Honest('A'), Honest('B'), Role('initiator_A')
+		// Done1()//,
+		// Secret(~k), Honest('A'), Honest('B'), Role('initiator_A')
 	]->[
 		Out(m) // send to network instead of saving to disk
 	]
@@ -104,9 +109,8 @@ rule Server [color=#d3d3d3]:
 		IN_R_1_foo(k, m),
 		Secret(k),
 		Seeds_S($mk1, $sk1),
-		Server_S_I(k, m),
-		N1(nonce),
-		Secret(k), Honest('A'), Honest('B'), Role('responder_S')
+		N1(nonce)//,
+		// Secret(k), Honest('A'), Honest('B'), Role('responder_S')
 	]->[
 		Out(o)
 	]
@@ -156,6 +160,14 @@ lemma flow: exists-trace
 
 lemma secrecy:
 	"All x #i #j. Secret(x) @i & K(x) @j ==> F"
+
+// lemma client_encryption_key:
+// 	"not(
+// 		Ex k #i #j.
+// 		SecretK(k) @ #i
+// 		& K(k) @ #j
+// 		& not(Ex #r. Reveal() @ #r)
+// 	)"
 
 // lemma secret_A:
 // 	"All k #i. Secret(k) @i & Role('initiator_A') @i ==>
