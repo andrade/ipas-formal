@@ -92,19 +92,18 @@ rule Server [color=#d3d3d3]:
 		mk = session_key($mk)
 		sk = session_key($sk)
 
-		// FIXME Porque não termina quando k não é fresco? (aparecem centenas de partial deconstructions) Afinal `flow` termina mas demora 2m20,
-		s = senc(~k, sealing_key($server))
+		s = senc(k, sealing_key($server))
 		computed_mac = MAC(<s, nonce>, mk)
 	in
 	[
 		In(<s, nonce, received_mac>)
 	]--[
-		Progress_S1($server, <s, nonce, received_mac>, senc(<~k, nonce>, sk)),
-		IN_R_1_foo(~k),
+		Progress_S1($server, <s, nonce, received_mac>, senc(<k, nonce>, sk)),
+		IN_R_1_foo(k),
 		Eq(received_mac, computed_mac),
-		Secret(~k)
+		Secret(k)
 	]->[
-		Out(senc(<~k, nonce>, sk))
+		Out(senc(<k, nonce>, sk))
 	]
 
 restriction Equality:
