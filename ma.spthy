@@ -13,8 +13,8 @@ builtins: hashing, signing, diffie-hellman
 functions:
 	CMAC/2,                  // RFC 4493
 	SHA/1,
-	ak/1 [private],
-	rk/0 [private],
+	ak/1 [private], // QE
+	rk/0 [private], // IAS
 	real/1 [private],
 	sgx_get_key/1
 
@@ -67,10 +67,13 @@ rule Associate:
 		BState(~tid_Boris, 'next_round', <~id_Enclave, ~id_CPU_2, ~tid_Alice>)
 	]
 
+// Model does not exchange AExGroup, AGroup, ASigRL and BGroup.
+// These are required in the original RA when communicating with IAS.
+// But this does not affect the session keys' derivation in IPAS.
+
 rule A1 [color=D7BDE2]:
 	let
-		// NOTE Não envio nem o AExGroup nem o AGroup (só contactamos IAS 1x)
-		// TODO remover nonce mais tarde, não está na impl. Tudo OK sem nonce?
+		// AExGroup and AGroup are not sent, does not affect model
 		m1 = <APublic>
 	in
 	[
@@ -86,6 +89,7 @@ rule A1 [color=D7BDE2]:
 
 rule A2 [color=D7BDE2]:
 	let
+		// ASigRL and BExGroup are not sent, does not affect model
 		m2 = <BPublic>
 
 		// report key depends on both enclave measurement and CPU
@@ -110,7 +114,6 @@ rule A2 [color=D7BDE2]:
 		AState(~tid_Alice, 'KE', <~id_Enclave, ~id_CPU_1, ~tid_Boris, $A, APublic, ~APrivate>),
 		In(m2)
 	]--[
-		// AKDK(~tid_Alice, ~tid_Boris, $A, $B, KDK),
 		Progress_A2(~tid_Alice, ~tid_Boris, m2, m3, KDK, $A)
 	]->[
 		AState(~tid_Alice, 'MA', <~id_Enclave, ~id_CPU_1, ~tid_Boris, BPublic, $A, APublic, ~APrivate, KDK>),
@@ -153,8 +156,9 @@ rule A4 [color=D7BDE2]:
 		AState(~tid_Alice, 'concluding', <~id_Enclave, ~id_CPU_1, ~tid_Boris, BPublic, $A, APublic, ~APrivate, KDK>)
 	]--[
 		IKeys(~tid_Alice, ~tid_Boris, $A, $B, MK, SK),
-		SessionKeys(~tid_Alice, ~tid_Boris, $A, $B, MK, SK), Role('A'),
+		SessionKeys(~tid_Alice, ~tid_Boris, $A, $B, MK, SK),
 		// SessionKeys($A, $B, MK, SK),
+		Secret(MK), Secret(SK),
 		Progress_A4(~tid_Alice, ~tid_Boris, MK, SK)
 	]->[
 	]
@@ -216,8 +220,6 @@ rule B2 [color=D2B4DE]:
 		BState(~tid_Boris, 'KEMA', <~id_Enclave, ~id_CPU_2, ~tid_Alice, APublic, $B, BPublic, ~BPrivate>),
 		In(m3)
 	]--[
-		// BKDK(~tid_Alice, ~tid_Boris, $A, $B, KDK),
-
 		// verify user data matches in both quotes
 		Eq(d1, data),
 		// enclave measurement is implicitly checked
@@ -237,10 +239,9 @@ in
 	BState(~tid_Boris, 'concluding', <~id_Enclave, ~id_CPU_2, ~tid_Alice, APublic, $B, BPublic, ~BPrivate, KDK>)
 ]--[
 	RKeys(~tid_Alice, ~tid_Boris, $A, $B, MK, SK),
-	SessionKeys(~tid_Alice, ~tid_Boris, $A, $B, MK, SK), Role('B'),
+	SessionKeys(~tid_Alice, ~tid_Boris, $A, $B, MK, SK),
 	// SessionKeys($A, $B, MK, SK),
-	Secret(MK),
-	Secret(SK),
+	Secret(MK), Secret(SK),
 	Progress_B3(~tid_Boris, ~tid_Alice, MK, SK)
 ]->[
 ]
@@ -290,7 +291,14 @@ lemma associate: exists-trace
 // 		)
 // 	"
 
-lemma flow_v3: exists-trace
+/**
+** Ensures protocol can complete successfully.
+**
+** There is at least one execution path
+** where session keys MK, SK are derived correctly
+** by two instances of the same enclave running on different platforms.
+**/
+lemma flow: exists-trace
 	"
 	(All #i #j. OnlyAssociateOnce() @#i & OnlyAssociateOnce() @#j ==> #i = #j) &
 
@@ -307,7 +315,7 @@ lemma flow_v3: exists-trace
 	Progress_B3(B, A, MK, SK) @ t6 &
 	Progress_A4(A, B, MK, SK) @ t7 &
 
-	// ensure different DH identities
+	// ensure different DH parties (don't want one instance DHing itself)
 	not(X=Y) &
 
 	// not(Ex #r. Leak_private_DH(X) @ r) &
