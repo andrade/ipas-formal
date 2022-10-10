@@ -5,7 +5,7 @@
 ** Status:   WIP
 **/
 
-theory ASv3
+theory MA
 begin
 
 builtins: hashing, signing, diffie-hellman
