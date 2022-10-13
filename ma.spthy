@@ -1,7 +1,7 @@
 /**
-** Protocol: AS v3 FIXME
+** Protocol: MA
 ** Author:   Daniel Andrade
-** Date:     03/2021
+** Date:     2022
 ** Status:   WIP
 **/
 
@@ -12,7 +12,6 @@ builtins: hashing, signing, diffie-hellman
 
 functions:
 	CMAC/2,                  // RFC 4493
-	SHA/1,
 	ak/1 [private], // QE
 	rk/0 [private], // IAS
 	real/1 [private],
@@ -27,7 +26,8 @@ rule Create_Enclave:
 		Create_Enclave(~id_Enclave, ~MRENCLAVE, ~MRSIGNER)
 	]->[
 		!ID_Enclave(~id_Enclave),
-		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER)
+		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
+		Out(~id_Enclave), Out(~MRENCLAVE), Out(~MRSIGNER) // for adversary
 	]
 
 rule Create_CPU:
@@ -36,14 +36,15 @@ rule Create_CPU:
 	]--[
 		Create_CPU(~id_CPU)
 	]->[
-		!ID_CPU(~id_CPU)
+		!ID_CPU(~id_CPU),
+		Out(~id_CPU) // for adversary
 	]
 
 rule DH [color=F4D03F]:
 	[ Fr(~k) ]-->[ !DH_private($id, ~k), !DH_public($id, 'g'^~k), Out('g'^~k) ]
 
-// rule Reveal_DH [color=FF0000]:
-// 	[ !DH_private(id, k) ]--[ Leak_private_DH(id) ]->[ Out(k) ]
+rule Reveal_DH [color=FF0000]:
+	[ !DH_private(id, k) ]--[ Leak_private_DH(id) ]->[ Out(k) ]
 
 // Associate initiator A and responder B
 rule Associate:
@@ -64,7 +65,8 @@ rule Associate:
 		Associate(~tid_Alice, ~tid_Boris)
 	]->[
 		AState(~tid_Alice, 'next_round', <~id_Enclave, ~id_CPU_1, ~tid_Boris>),
-		BState(~tid_Boris, 'next_round', <~id_Enclave, ~id_CPU_2, ~tid_Alice>)
+		BState(~tid_Boris, 'next_round', <~id_Enclave, ~id_CPU_2, ~tid_Alice>),
+		Out(~tid_Alice), Out(~tid_Boris) // for adversary
 	]
 
 // Model does not exchange AExGroup, AGroup, ASigRL and BGroup.
@@ -90,6 +92,7 @@ rule A1 [color=D7BDE2]:
 rule A2 [color=D7BDE2]:
 	let
 		// ASigRL and BExGroup are not sent, does not affect model
+		BPublic = 'g'^BPrivate
 		m2 = <BPublic>
 
 		// report key depends on both enclave measurement and CPU
@@ -156,8 +159,6 @@ rule A4 [color=D7BDE2]:
 		AState(~tid_Alice, 'concluding', <~id_Enclave, ~id_CPU_1, ~tid_Boris, BPublic, $A, APublic, ~APrivate, KDK>)
 	]--[
 		IKeys(~tid_Alice, ~tid_Boris, $A, $B, MK, SK),
-		SessionKeys(~tid_Alice, ~tid_Boris, $A, $B, MK, SK),
-		// SessionKeys($A, $B, MK, SK),
 		Secret(MK), Secret(SK),
 		Progress_A4(~tid_Alice, ~tid_Boris, MK, SK)
 	]->[
@@ -165,6 +166,7 @@ rule A4 [color=D7BDE2]:
 
 rule B1 [color=D2B4DE]:
 	let
+		APublic = 'g'^APrivate
 		m1 = <APublic>
 		m2 = <BPublic>
 	in
@@ -192,6 +194,7 @@ rule B2 [color=D2B4DE]:
 		// report key depends on both enclave measurement and CPU
 		report_key = sgx_get_key(<~MRENCLAVE, 'report', real(~id_CPU_2)>)
 
+		APublic = 'g'^APrivate
 		KDK = APublic^~BPrivate
 		VK = CMAC('VK', KDK)
 
@@ -239,8 +242,6 @@ in
 	BState(~tid_Boris, 'concluding', <~id_Enclave, ~id_CPU_2, ~tid_Alice, APublic, $B, BPublic, ~BPrivate, KDK>)
 ]--[
 	RKeys(~tid_Alice, ~tid_Boris, $A, $B, MK, SK),
-	SessionKeys(~tid_Alice, ~tid_Boris, $A, $B, MK, SK),
-	// SessionKeys($A, $B, MK, SK),
 	Secret(MK), Secret(SK),
 	Progress_B3(~tid_Boris, ~tid_Alice, MK, SK)
 ]->[
@@ -262,12 +263,6 @@ restriction Equality:
 restriction Inequality:
 	"All x #i. Neq(x,x) @i ==> F"
 
-// restriction OnlyOnce:
-// 	"All #i #j. OnlyOnce() @#i & OnlyOnce() @#j ==> #i = #j"
-
-// restriction OnlyOneEnclave:
-// 	"All #i #j. OnlyOneEnclave() @#i & OnlyOneEnclave() @#j ==> #i = #j"
-
 lemma secrecy:
 	"All k #i #j. Secret(k) @i & K(k) @j ==> F"
 
@@ -280,16 +275,18 @@ lemma associate: exists-trace
 ** There is a trace where all equality checks are satisfied and
 ** session keys MK, SK are setup without revealing private DH keys.
 **/
-// lemma session_keys: exists-trace
-// 	"
-// 		(All x y #i. Eq(x,y)@i ==> x=y) &
-// 		(Ex A B MK SK #k.
-// 			SessionKeys(A, B, MK, SK) @ k &
-// 			not(Ex #r. Leak_private_DH(A) @ r) &
-// 			not(Ex #r. Leak_private_DH(B) @ r) &
-// 			not(Ex #r. Reveal_IAS() @ r)
-// 		)
-// 	"
+lemma session_keys: exists-trace
+	"
+		Ex tid_A tid_B A B MK SK #i #j.
+
+			IKeys(tid_A, tid_B, A, B, MK, SK) @ #i &
+			RKeys(tid_A, tid_B, A, B, MK, SK) @ #j &
+
+			not(Ex #r. Leak_private_DH(A) @ r) &
+			not(Ex #r. Leak_private_DH(B) @ r) &
+
+			not(A=B)
+	"
 
 /**
 ** Ensures protocol can complete successfully.
@@ -318,13 +315,28 @@ lemma flow: exists-trace
 	// ensure different DH parties (don't want one instance DHing itself)
 	not(X=Y) &
 
-	// not(Ex #r. Leak_private_DH(X) @ r) &
-	// not(Ex #r. Leak_private_DH(Y) @ r) &
+	not(Ex #r. Leak_private_DH(X) @ r) &
+	not(Ex #r. Leak_private_DH(Y) @ r) &
 
 	IKeys(A, B, X, Y, MK, SK) @ #i &
 	RKeys(A, B, X, Y, MK, SK) @ #j &
 
 	t1<t2 & t2<t3 & t3<t4 & t4<t5)
+	"
+
+// TODO remover o $A, $B de state ?
+
+
+lemma session_keys_secrecy:
+	"not(
+		Ex  tid_A tid_B  A B  MK SK  #t1 #t2.
+			IKeys(tid_A, tid_B, A, B, MK, SK) @ #t1 &
+			RKeys(tid_A, tid_B, A, B, MK, SK) @ #t2 &
+			((Ex #i. K(MK) @i) | (Ex #i. K(SK) @i)) &
+			not(Ex #r. Leak_private_DH(A) @ r) &
+			not(Ex #r. Leak_private_DH(B) @ r) &
+			not(A=B)
+	)
 	"
 
 end
