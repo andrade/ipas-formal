@@ -263,7 +263,7 @@ restriction Inequality:
 	"All x #i. Neq(x,x) @i ==> F"
 
 lemma secrecy:
-	"All k #i #j. Secret(k) @i & K(k) @j ==> F"
+	"All k #i. Secret(k) @i ==> (not (Ex #j. K(k) @j)) | (Ex X #j. Leak_private_DH(X) @j)"
 
 lemma associate: exists-trace
 	"Ex tid_Alice tid_Boris #k. Associate(tid_Alice, tid_Boris) @ #k"
