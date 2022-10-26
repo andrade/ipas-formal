@@ -14,8 +14,7 @@ functions:
 	CMAC/2,                  // RFC 4493
 	ak/1 [private], // QE
 	rk/0 [private], // IAS
-	real/1 [private],
-	sgx_get_key/1
+	sgx_get_key/1 [private]
 
 rule Create_Enclave:
 	[
@@ -96,7 +95,7 @@ rule A2 [color=D7BDE2]:
 		m2 = <BPublic>
 
 		// report key depends on both enclave measurement and CPU
-		report_key = sgx_get_key(<~MRENCLAVE, 'report', real(~id_CPU_1)>)
+		report_key = sgx_get_key(<~MRENCLAVE, 'report', ~id_CPU_1>)
 
 		KDK = BPublic^~APrivate
 		VK = CMAC('VK', KDK)
@@ -192,7 +191,7 @@ rule B2 [color=D2B4DE]:
 
 
 		// report key depends on both enclave measurement and CPU
-		report_key = sgx_get_key(<~MRENCLAVE, 'report', real(~id_CPU_2)>)
+		report_key = sgx_get_key(<~MRENCLAVE, 'report', ~id_CPU_2>)
 
 		APublic = 'g'^APrivate
 		KDK = APublic^~BPrivate
