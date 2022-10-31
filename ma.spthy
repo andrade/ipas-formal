@@ -75,6 +75,7 @@ rule Associate:
 rule A1 [color=D7BDE2]:
 	let
 		// AExGroup and AGroup are not sent, does not affect model
+		APublic = 'g'^~APrivate
 		m1 = <APublic>
 	in
 	[
@@ -167,6 +168,7 @@ rule B1 [color=D2B4DE]:
 	let
 		APublic = 'g'^APrivate
 		m1 = <APublic>
+		BPublic = 'g'^~BPrivate
 		m2 = <BPublic>
 	in
 	[
