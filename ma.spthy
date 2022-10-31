@@ -63,8 +63,8 @@ rule Associate:
 
 		Associate(~tid_Alice, ~tid_Boris)
 	]->[
-		AState(~tid_Alice, 'next_round', <~id_Enclave, ~id_CPU_1, ~tid_Boris>),
-		BState(~tid_Boris, 'next_round', <~id_Enclave, ~id_CPU_2, ~tid_Alice>),
+		AState(~tid_Alice, 'next_round', <~id_Enclave, ~id_CPU_1, ~id_CPU_2, ~tid_Boris, $B, $A>),
+		BState(~tid_Boris, 'next_round', <~id_Enclave, ~id_CPU_1, ~id_CPU_2, ~tid_Alice, $A, $B>),
 		Out(~tid_Alice), Out(~tid_Boris) // for adversary
 	]
 
@@ -78,13 +78,13 @@ rule A1 [color=D7BDE2]:
 		m1 = <APublic>
 	in
 	[
-		AState(~tid_Alice, 'next_round', <~id_Enclave, ~id_CPU_1, ~tid_Boris>),
+		AState(~tid_Alice, 'next_round', <~id_Enclave, ~id_CPU_1, ~id_CPU_2, ~tid_Boris, $B, $A>),
 		!DH_private($A, ~APrivate),
 		!DH_public($A, APublic)
 	]--[
 		Progress_A1(~tid_Alice, ~tid_Boris, m1)
 	]->[
-		AState(~tid_Alice, 'KE', <~id_Enclave, ~id_CPU_1, ~tid_Boris, $A, APublic, ~APrivate>),
+		AState(~tid_Alice, 'KE', <~id_Enclave, ~id_CPU_1, ~id_CPU_2, ~tid_Boris, $B, $A, APublic, ~APrivate>),
 		Out(m1)
 	]
 
@@ -113,12 +113,12 @@ rule A2 [color=D7BDE2]:
 	in
 	[
 		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
-		AState(~tid_Alice, 'KE', <~id_Enclave, ~id_CPU_1, ~tid_Boris, $A, APublic, ~APrivate>),
+		AState(~tid_Alice, 'KE', <~id_Enclave, ~id_CPU_1, ~id_CPU_2, ~tid_Boris, $B, $A, APublic, ~APrivate>),
 		In(m2)
 	]--[
 		Progress_A2(~tid_Alice, ~tid_Boris, m2, m3, KDK, $A)
 	]->[
-		AState(~tid_Alice, 'MA', <~id_Enclave, ~id_CPU_1, ~tid_Boris, BPublic, $A, APublic, ~APrivate, KDK>),
+		AState(~tid_Alice, 'MA', <~id_Enclave, ~id_CPU_1, ~id_CPU_2, ~tid_Boris, $B, BPublic, $A, APublic, ~APrivate, KDK, VK>),
 		Out(m3)
 	]
 
@@ -141,12 +141,12 @@ rule A3 [color=D7BDE2]:
 		m4 = <x, CMAC(x, SMK)>
 	in
 	[
-		AState(~tid_Alice, 'MA', <~id_Enclave, ~id_CPU_1, ~tid_Boris, BPublic, $A, APublic, ~APrivate, KDK>),
+		AState(~tid_Alice, 'MA', <~id_Enclave, ~id_CPU_1, ~id_CPU_2, ~tid_Boris, $B, BPublic, $A, APublic, ~APrivate, KDK, VK>),
 		In(m4)
 	]--[
 		Progress_A3(~tid_Alice, ~tid_Boris, m4)
 	]->[
-		AState(~tid_Alice, 'concluding', <~id_Enclave, ~id_CPU_1, ~tid_Boris, BPublic, $A, APublic, ~APrivate, KDK>)
+		AState(~tid_Alice, 'concluding', <~id_Enclave, ~id_CPU_1, ~id_CPU_2, ~tid_Boris, $B, BPublic, $A, APublic, ~APrivate, KDK, VK>)
 	]
 
 rule A4 [color=D7BDE2]:
@@ -155,7 +155,7 @@ rule A4 [color=D7BDE2]:
 		SK = CMAC('SK', KDK)
 	in
 	[
-		AState(~tid_Alice, 'concluding', <~id_Enclave, ~id_CPU_1, ~tid_Boris, BPublic, $A, APublic, ~APrivate, KDK>)
+		AState(~tid_Alice, 'concluding', <~id_Enclave, ~id_CPU_1, ~id_CPU_2, ~tid_Boris, $B, BPublic, $A, APublic, ~APrivate, KDK, VK>)
 	]--[
 		IKeys(~tid_Alice, ~tid_Boris, $A, $B, MK, SK),
 		Secret(MK), Secret(SK),
@@ -170,14 +170,14 @@ rule B1 [color=D2B4DE]:
 		m2 = <BPublic>
 	in
 	[
-		BState(~tid_Boris, 'next_round', <~id_Enclave, ~id_CPU_2, ~tid_Alice>),
+		BState(~tid_Boris, 'next_round', <~id_Enclave, ~id_CPU_1, ~id_CPU_2, ~tid_Alice, $A, $B>),
 		!DH_private($B, ~BPrivate),
 		!DH_public($B, BPublic),
 		In(m1)
 	]--[
 		Progress_B1(~tid_Boris, ~tid_Alice, m1, m2)
 	]->[
-		BState(~tid_Boris, 'KEMA', <~id_Enclave, ~id_CPU_2, ~tid_Alice, APublic, $B, BPublic, ~BPrivate>),
+		BState(~tid_Boris, 'KEMA', <~id_Enclave, ~id_CPU_1, ~id_CPU_2, ~tid_Alice, $A, APublic, $B, BPublic, ~BPrivate>),
 		Out(m2)
 	]
 
@@ -219,7 +219,7 @@ rule B2 [color=D2B4DE]:
 	in
 	[
 		!Measurements(~id_Enclave, ~MRENCLAVE, ~MRSIGNER),
-		BState(~tid_Boris, 'KEMA', <~id_Enclave, ~id_CPU_2, ~tid_Alice, APublic, $B, BPublic, ~BPrivate>),
+		BState(~tid_Boris, 'KEMA', <~id_Enclave, ~id_CPU_1, ~id_CPU_2, ~tid_Alice, $A, APublic, $B, BPublic, ~BPrivate>),
 		In(m3)
 	]--[
 		// verify user data matches in both quotes
@@ -228,7 +228,7 @@ rule B2 [color=D2B4DE]:
 
 		Progress_B2(~tid_Boris, ~tid_Alice, m3, m4, KDK, $B)
 	]->[
-		BState(~tid_Boris, 'concluding', <~id_Enclave, ~id_CPU_2, ~tid_Alice, APublic, $B, BPublic, ~BPrivate, KDK>),
+		BState(~tid_Boris, 'concluding', <~id_Enclave, ~id_CPU_1, ~id_CPU_2, ~tid_Alice, $A, APublic, $B, BPublic, ~BPrivate, KDK, VK>),
 		Out(m4)
 	]
 
@@ -238,7 +238,7 @@ let
 	SK = CMAC('SK', KDK)
 in
 [
-	BState(~tid_Boris, 'concluding', <~id_Enclave, ~id_CPU_2, ~tid_Alice, APublic, $B, BPublic, ~BPrivate, KDK>)
+	BState(~tid_Boris, 'concluding', <~id_Enclave, ~id_CPU_1, ~id_CPU_2, ~tid_Alice, $A, APublic, $B, BPublic, ~BPrivate, KDK, VK>)
 ]--[
 	RKeys(~tid_Alice, ~tid_Boris, $A, $B, MK, SK),
 	Secret(MK), Secret(SK),
