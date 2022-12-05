@@ -2,7 +2,7 @@
 ** Protocol: MA
 ** Author:   Daniel Andrade
 ** Date:     2022
-** Status:   WIP
+** Status:   Working
 **/
 
 theory MA
@@ -271,25 +271,6 @@ lemma associate: exists-trace
 	"Ex tid_Alice tid_Boris #k. Associate(tid_Alice, tid_Boris) @ #k"
 
 /**
-** Ensure session keys can be setup between honest agents.
-**
-** There is a trace where all equality checks are satisfied and
-** session keys MK, SK are setup without revealing private DH keys.
-**/
-lemma session_keys: exists-trace
-	"
-		Ex tid_A tid_B A B MK SK #i #j.
-
-			IKeys(tid_A, tid_B, A, B, MK, SK) @ #i &
-			RKeys(tid_A, tid_B, A, B, MK, SK) @ #j &
-
-			not(Ex #r. Leak_private_DH(A) @ r) &
-			not(Ex #r. Leak_private_DH(B) @ r) &
-
-			not(A=B)
-	"
-
-/**
 ** Ensures protocol can complete successfully.
 **
 ** There is at least one execution path
@@ -323,21 +304,6 @@ lemma flow: exists-trace
 	RKeys(A, B, X, Y, MK, SK) @ #j &
 
 	t1<t2 & t2<t3 & t3<t4 & t4<t5)
-	"
-
-// TODO remover o $A, $B de state ?
-
-
-lemma session_keys_secrecy:
-	"not(
-		Ex  tid_A tid_B  A B  MK SK  #t1 #t2.
-			IKeys(tid_A, tid_B, A, B, MK, SK) @ #t1 &
-			RKeys(tid_A, tid_B, A, B, MK, SK) @ #t2 &
-			((Ex #i. K(MK) @i) | (Ex #i. K(SK) @i)) &
-			not(Ex #r. Leak_private_DH(A) @ r) &
-			not(Ex #r. Leak_private_DH(B) @ r) &
-			not(A=B)
-	)
 	"
 
 end
